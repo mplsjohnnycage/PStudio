@@ -1,0 +1,42 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -b ../../packages/api && next build",
+    "check-types": "tsc -b ../../packages/api && tsc --noEmit",
+    "dev": "next dev --port 3001",
+    "env:generate": "varlock codegen",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@orpc/client": "^1.15.6",
+    "@orpc/server": "^1.15.6",
+    "@orpc/tanstack-query": "^1.15.6",
+    "@prospect-studio/api": "*",
+    "@prospect-studio/ui": "*",
+    "@swc/helpers": "^0.5.23",
+    "@tanstack/react-query": "^5.104.2",
+    "@varlock/nextjs-integration": "1.2.5",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "evlog": "^2.33.1",
+    "lucide-react": "^1.41.0",
+    "next": "^16.3.4",
+    "next-themes": "^0.4.6",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "sonner": "^2.0.8",
+    "varlock": "1.23.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@prospect-studio/config": "*",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@tanstack/react-query-devtools": "^5.104.2",
+    "@types/node": "^26.4.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3"
+  }
+}

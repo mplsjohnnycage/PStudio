@@ -1,0 +1,3 @@
+{
+  "extends": "@prospect-studio/config/tsconfig.base.json"
+}

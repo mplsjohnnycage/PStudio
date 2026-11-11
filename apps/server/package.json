@@ -1,0 +1,32 @@
+{
+  "name": "server",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc -b ../../packages/api && tsdown",
+    "check-types": "tsc -b ../../packages/api && tsc --noEmit",
+    "compile": "bun build --compile --no-compile-autoload-dotenv --minify --sourcemap --bytecode ./src/index.ts --outfile server",
+    "dev": "tsx watch src/index.ts",
+    "env:generate": "varlock codegen",
+    "start": "node dist/index.mjs"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "@orpc/openapi": "^1.15.6",
+    "@orpc/server": "^1.15.6",
+    "@orpc/zod": "^1.15.6",
+    "@prospect-studio/api": "*",
+    "@prospect-studio/db": "*",
+    "evlog": "^2.33.1",
+    "hono": "^4.13.7",
+    "varlock": "1.23.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@prospect-studio/config": "*",
+    "@types/node": "^26.4.1",
+    "tsdown": "^0.23.0",
+    "tsx": "^4.23.13",
+    "typescript": "^6.0.3"
+  }
+}
