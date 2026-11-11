@@ -1,0 +1,29 @@
+{
+  "name": "@prospect-studio/db",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "check-types": "tsc -b",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:migrate:deploy": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.4",
+    "pg": "^8.23.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@prospect-studio/config": "*",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "0.31.11",
+    "typescript": "^6.0.3",
+    "varlock": "1.23.0"
+  }
+}

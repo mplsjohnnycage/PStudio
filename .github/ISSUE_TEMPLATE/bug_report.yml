@@ -1,0 +1,25 @@
+name: Bug report
+description: Report a reproducible problem
+title: "Bug: "
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Relevant evidence
+      description: Exclude secrets, personal data, and access tokens.
