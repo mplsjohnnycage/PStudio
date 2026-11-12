@@ -13,12 +13,17 @@ test("the Neon API provides all protected workspace and prospect routes", async 
   await Promise.all(
     [
       ["GET", "/v1/workspaces"],
+      ["POST", "/v1/workspaces/ws1/discover/minneapolis-license"],
       ["POST", "/v1/workspaces"],
       ["GET", "/v1/workspaces/ws1/prospects"],
       ["POST", "/v1/workspaces/ws1/prospects"],
       ["POST", "/v1/workspaces/ws1/prospects/pros1/jobs"],
       ["POST", "/v1/workspaces/ws1/prospects/pros1/previews"],
+      ["GET", "/v1/workspaces/ws1/prospects/pros1/previews"],
       ["GET", "/v1/workspaces/ws1/previews/prev1"],
+      ["GET", "/v1/workspaces/ws1/previews/prev1/review"],
+      ["POST", "/v1/workspaces/ws1/previews/prev1/review"],
+      ["POST", "/v1/workspaces/ws1/previews/prev1/decision"],
     ].map(async ([method, path]) => {
       const response = await app.request(`https://api.example.invalid${path}`, {
         method,

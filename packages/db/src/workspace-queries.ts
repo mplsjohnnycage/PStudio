@@ -45,3 +45,22 @@ export function createOwnedWorkspace(
     return { id, kind: "created" as const };
   });
 }
+
+/** Preflight access check for rate-sensitive discovery. Admission rechecks in a transaction. */
+export async function mayDiscoverInWorkspace(
+  db: Database,
+  userId: string,
+  workspaceId: string
+): Promise<boolean> {
+  const rows = await db
+    .select({ role: workspaceMemberships.role })
+    .from(workspaceMemberships)
+    .where(
+      and(
+        eq(workspaceMemberships.userId, userId),
+        eq(workspaceMemberships.workspaceId, workspaceId)
+      )
+    )
+    .limit(1);
+  return ["owner", "operator"].includes(rows.at(0)?.role ?? "");
+}

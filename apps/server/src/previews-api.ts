@@ -12,12 +12,26 @@ export interface PreviewResult {
   releaseId: string;
   version: number;
 }
+export interface PreviewHistoryEntry {
+  createdAt: Date;
+  expiresAt: Date;
+  previewId: string;
+  releaseId: string;
+  sha256: string;
+  state: string;
+  version: number;
+}
 export interface PreviewsDependencies {
   create: (
     userId: string,
     workspaceId: string,
     prospectId: string
   ) => Promise<CreatePreviewResult>;
+  list: (
+    userId: string,
+    workspaceId: string,
+    prospectId: string
+  ) => Promise<readonly PreviewHistoryEntry[] | null>;
   read: (
     userId: string,
     workspaceId: string,
@@ -59,6 +73,27 @@ export function createPreviewsRoutes(deps: PreviewsDependencies) {
               },
               201
             );
+      } catch {
+        return c.json({ error: "temporarily_unavailable" }, 503);
+      }
+    }
+  );
+  app.get(
+    "/workspaces/:workspaceId/prospects/:prospectId/previews",
+    async (c) => {
+      const userId = await authorize(c.req.header("authorization"));
+      if (!userId) {
+        return c.json({ error: "unauthorized" }, 401);
+      }
+      const { workspaceId, prospectId } = c.req.param();
+      if (!(RESOURCE_ID.test(workspaceId) && RESOURCE_ID.test(prospectId))) {
+        return c.json({ error: "invalid_resource_id" }, 400);
+      }
+      try {
+        const history = await deps.list(userId, workspaceId, prospectId);
+        return history === null
+          ? c.json({ error: "not_found" }, 404)
+          : c.json({ previews: history });
       } catch {
         return c.json({ error: "temporarily_unavailable" }, 503);
       }

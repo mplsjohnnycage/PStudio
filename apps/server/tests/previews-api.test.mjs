@@ -110,3 +110,43 @@ test("previews deny unavailable and missing membership without leaking SQL", asy
   assert.equal(r.status, 503);
   assert.equal((await r.text()).includes("secret database error"), false);
 });
+
+test("private preview history is tenant-scoped and versioned", async () => {
+  const app = createPreviewsRoutes({
+    create: async () => ({ kind: "not_found" }),
+    list: async (user, workspace, prospect) =>
+      user === "owner" && workspace === "ws-one" && prospect === "p-one"
+        ? [
+            {
+              createdAt: new Date(),
+              expiresAt: new Date(),
+              previewId: "p-1",
+              releaseId: "r-1",
+              sha256: "a".repeat(64),
+              state: "approved",
+              version: 1,
+            },
+          ]
+        : null,
+    read: async () => null,
+    verify: async (header) => (header === auth.Authorization ? "owner" : null),
+  });
+  const res = await app.request(`${base}/prospects/p-one/previews`, {
+    headers: auth,
+  });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).previews[0].state, "approved");
+  assert.equal(
+    (await app.request(`${base}/prospects/p-one/previews`)).status,
+    401
+  );
+  assert.equal(
+    (
+      await app.request(
+        "http://localhost/workspaces/ws-two/prospects/p-one/previews",
+        { headers: auth }
+      )
+    ).status,
+    404
+  );
+});

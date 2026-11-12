@@ -88,6 +88,58 @@ export function createWorkspacePreview(
   });
 }
 
+/** All historical versions remain inspectable by active workspace members. */
+export async function listWorkspacePreviews(
+  db: Database,
+  userId: string,
+  workspaceId: string,
+  prospectId: string
+) {
+  const membership = await db
+    .select({ role: workspaceMemberships.role })
+    .from(workspaceMemberships)
+    .where(
+      and(
+        eq(workspaceMemberships.workspaceId, workspaceId),
+        eq(workspaceMemberships.userId, userId)
+      )
+    )
+    .limit(1);
+  if (membership.length === 0) {
+    return null;
+  }
+  return db
+    .select({
+      createdAt: previews.createdAt,
+      expiresAt: previews.expiresAt,
+      previewId: previews.id,
+      releaseId: releases.id,
+      sha256: releaseArtifacts.sha256,
+      state: previews.state,
+      version: releases.version,
+    })
+    .from(previews)
+    .innerJoin(releases, eq(previews.releaseId, releases.id))
+    .innerJoin(releaseArtifacts, eq(releaseArtifacts.releaseId, releases.id))
+    .innerJoin(
+      prospects,
+      and(
+        eq(prospects.id, previews.prospectId),
+        eq(prospects.workspaceId, workspaceId)
+      )
+    )
+    .innerJoin(
+      workspaceMemberships,
+      and(
+        eq(workspaceMemberships.workspaceId, prospects.workspaceId),
+        eq(workspaceMemberships.userId, userId)
+      )
+    )
+    .where(eq(prospects.id, prospectId))
+    .orderBy(desc(releases.version))
+    .limit(100);
+}
+
 export interface PrivatePreview {
   html: string;
   previewId: string;
@@ -138,7 +190,13 @@ export async function readPrivatePreview(
     .where(
       and(
         eq(previews.id, previewId),
-        gt(previews.expiresAt, new Date()),
+        or(
+          gt(previews.expiresAt, new Date()),
+          and(
+            eq(previews.state, "approved"),
+            eq(workspaceMemberships.userId, userId)
+          )
+        ),
         or(
           eq(workspaceMemberships.userId, userId),
           eq(previewViewers.viewerId, userId)

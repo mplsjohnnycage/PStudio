@@ -4,10 +4,12 @@ import { onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { appRouter } from "@prospect-studio/api/routers/index";
+import { admitSourcedProspect } from "@prospect-studio/db/admission-queries";
 import { enqueueWorkspaceJob } from "@prospect-studio/db/job-enqueue";
 import { readWorkspaceJobs } from "@prospect-studio/db/job-queries";
 import {
   createWorkspacePreview,
+  listWorkspacePreviews,
   readPrivatePreview,
 } from "@prospect-studio/db/preview-queries";
 import {
@@ -15,8 +17,14 @@ import {
   listWorkspaceProspects,
 } from "@prospect-studio/db/prospect-queries";
 import {
+  decideWorkspaceReview,
+  openWorkspaceReview,
+  readWorkspaceReview,
+} from "@prospect-studio/db/review-queries";
+import {
   createOwnedWorkspace,
   listUserWorkspaces,
+  mayDiscoverInWorkspace,
 } from "@prospect-studio/db/workspace-queries";
 import { initLogger } from "evlog";
 import { createFsDrain } from "evlog/fs";
@@ -25,11 +33,14 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createNeonTokenVerifier } from "./auth";
 import { createContext } from "./context";
+import { createDiscoveryRoutes } from "./discovery-api";
 import { ENV } from "./env.server";
 import { createJobEnqueueRoutes } from "./job-enqueue-api";
 import { createJobsRoutes } from "./jobs-api";
+import { searchMinneapolisLicense } from "./minneapolis-license-source";
 import { createPreviewsRoutes } from "./previews-api";
 import { createProspectsRoutes } from "./prospects-api";
+import { createReviewRoutes } from "./review-api";
 import { db } from "./services";
 import { createWorkspacesRoutes } from "./workspaces-api";
 
@@ -59,6 +70,17 @@ const verify = createNeonTokenVerifier({
   jwksUrl: process.env.NEON_AUTH_JWKS_URL,
 });
 
+app.route(
+  "/v1",
+  createDiscoveryRoutes({
+    admit: (userId, workspaceId, candidate) =>
+      admitSourcedProspect(db, userId, workspaceId, candidate),
+    authorize: (userId, workspaceId) =>
+      mayDiscoverInWorkspace(db, userId, workspaceId),
+    search: (query) => searchMinneapolisLicense(query),
+    verify,
+  })
+);
 app.route(
   "/v1",
   createJobsRoutes({
@@ -92,6 +114,8 @@ app.route(
   createPreviewsRoutes({
     create: (userId, workspaceId, prospectId) =>
       createWorkspacePreview(db, userId, workspaceId, prospectId),
+    list: (userId, workspaceId, prospectId) =>
+      listWorkspacePreviews(db, userId, workspaceId, prospectId),
     read: (userId, workspaceId, previewId) =>
       readPrivatePreview(db, userId, workspaceId, previewId),
     verify,
@@ -103,6 +127,19 @@ app.route(
   createWorkspacesRoutes({
     create: (userId, name) => createOwnedWorkspace(db, userId, name),
     list: (userId) => listUserWorkspaces(db, userId),
+    verify,
+  })
+);
+
+app.route(
+  "/v1",
+  createReviewRoutes({
+    decide: (userId, workspaceId, previewId, decision) =>
+      decideWorkspaceReview(db, userId, workspaceId, previewId, decision),
+    open: (userId, workspaceId, previewId) =>
+      openWorkspaceReview(db, userId, workspaceId, previewId),
+    read: (userId, workspaceId, previewId) =>
+      readWorkspaceReview(db, userId, workspaceId, previewId),
     verify,
   })
 );

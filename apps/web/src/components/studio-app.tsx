@@ -60,6 +60,20 @@ interface Preview {
   releaseId: string;
   version: number;
 }
+interface PreviewVersion {
+  previewId: string;
+  releaseId: string;
+  sha256: string;
+  state: string;
+  version: number;
+}
+interface Review {
+  approvalId: string;
+  decidedBy: string | null;
+  previewId: string;
+  releaseId: string;
+  state: string;
+}
 
 const serverConfigured = Boolean(process.env.NEXT_PUBLIC_SERVER_URL);
 const apiOrigin = process.env.NEXT_PUBLIC_SERVER_URL?.replace(/\/$/, "") ?? "";
@@ -89,17 +103,19 @@ async function studioApi<T>(path: string, options?: RequestInit): Promise<T> {
   if (!response.ok) {
     const code = (value as { error?: string }).error ?? "request_failed";
     throw new Error(
-      code === "not_found"
-        ? "Not found, or this workspace is not accessible."
-        : code === "unauthorized"
-          ? "Your session has expired or is not authorized."
-          : code === "temporarily_unavailable"
-            ? "The service is unavailable. Check the server and database connection."
-            : code === "limit_reached"
-              ? "Workspace limit reached."
-              : code === "invalid_input"
-                ? "Review your inputs and try again."
-                : code
+      code === "selection_required"
+        ? `Multiple historical matches. Select a license ID and retry: ${JSON.stringify((value as { matches?: unknown }).matches ?? [])}`
+        : code === "not_found"
+          ? "Not found, or this workspace is not accessible."
+          : code === "unauthorized"
+            ? "Your session has expired or is not authorized."
+            : code === "temporarily_unavailable"
+              ? "The service is unavailable. Check the server and database connection."
+              : code === "limit_reached"
+                ? "Workspace limit reached."
+                : code === "invalid_input"
+                  ? "Review your inputs and try again."
+                  : code
     );
   }
   return value as T;
@@ -281,9 +297,13 @@ export function StudioApp() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [previewVersions, setPreviewVersions] = useState<PreviewVersion[]>([]);
+  const [review, setReview] = useState<Review | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showWorkspaceCreate, setShowWorkspaceCreate] = useState(false);
   const [workspaceName, setWorkspaceName] = useState("");
+  const [discoveryQuery, setDiscoveryQuery] = useState("");
+  const [discoveryExternalId, setDiscoveryExternalId] = useState("");
   const [newName, setNewName] = useState("");
   const [newAddress, setNewAddress] = useState("");
   const [newWebsite, setNewWebsite] = useState("");
@@ -342,7 +362,22 @@ export function StudioApp() {
     );
     setSelected(null);
     setPreview(null);
+    setPreviewVersions([]);
+    setReview(null);
   }, [workspaceId, refresh]);
+
+  useEffect(() => {
+    if (!(workspaceId && selected)) {
+      setPreviewVersions([]);
+      setReview(null);
+      return;
+    }
+    studioApi<{ previews: PreviewVersion[] }>(
+      `/workspaces/${workspaceId}/prospects/${selected}/previews`
+    )
+      .then((result) => setPreviewVersions(result.previews))
+      .catch(() => setPreviewVersions([]));
+  }, [workspaceId, selected]);
 
   const current = workspaces.find((w) => w.id === workspaceId);
   const isOperator = current?.role === "owner" || current?.role === "operator";
@@ -431,6 +466,36 @@ export function StudioApp() {
       }
     );
   }
+  async function discoverLicense(e: FormEvent) {
+    e.preventDefault();
+    if (!workspaceId) {
+      return;
+    }
+    const payload = {
+      query: discoveryQuery.trim(),
+      ...(discoveryExternalId.trim()
+        ? { externalId: discoveryExternalId.trim() }
+        : {}),
+    };
+    await action(
+      "discover",
+      () =>
+        studioApi<{ prospectId: string; kind: string; recordStatus: string }>(
+          `/workspaces/${workspaceId}/discover/minneapolis-license`,
+          { body: JSON.stringify(payload), method: "POST" }
+        ),
+      async ({ prospectId, kind }) => {
+        await refresh(workspaceId);
+        setSelected(prospectId);
+        setDiscoveryExternalId("");
+        setNotice(
+          kind === "duplicate"
+            ? "Existing sourced prospect selected; duplicate record not created."
+            : "Imported historical municipal license evidence. Current business and license status remain unverified."
+        );
+      }
+    );
+  }
   async function enqueue(prospectId: string) {
     await action(
       "enqueue",
@@ -464,8 +529,84 @@ export function StudioApp() {
           `/workspaces/${workspaceId}/previews/${res.previewId}`
         );
         setPreview(details);
+        setReview(null);
+        const versions = await studioApi<{ previews: PreviewVersion[] }>(
+          `/workspaces/${workspaceId}/prospects/${prospectId}/previews`
+        );
+        setPreviewVersions(versions.previews);
         setNotice(
           `Private draft v${details.version} generated. No publication or outreach occurred.`
+        );
+      }
+    );
+  }
+
+  async function loadPreview(previewId: string) {
+    await action(
+      "load-preview",
+      () =>
+        studioApi<Preview>(`/workspaces/${workspaceId}/previews/${previewId}`),
+      async (details) => {
+        setPreview(details);
+        try {
+          const record = await studioApi<Review>(
+            `/workspaces/${workspaceId}/previews/${previewId}/review`
+          );
+          setReview(record);
+        } catch {
+          setReview(null);
+        }
+      }
+    );
+  }
+  async function requestReview() {
+    if (!preview) {
+      return;
+    }
+    const { previewId } = preview;
+    await action(
+      "request-review",
+      () =>
+        studioApi<{ approvalId: string }>(
+          `/workspaces/${workspaceId}/previews/${previewId}/review`,
+          { body: "{}", method: "POST" }
+        ),
+      async () => {
+        setReview(
+          await studioApi<Review>(
+            `/workspaces/${workspaceId}/previews/${previewId}/review`
+          )
+        );
+        setNotice(
+          "Private concept submitted for owner review. Nothing was published."
+        );
+      }
+    );
+  }
+  async function decideReview(decision: "approved" | "rejected") {
+    if (!(preview && chosen)) {
+      return;
+    }
+    const { previewId } = preview;
+    await action(
+      "decision",
+      () =>
+        studioApi<{ approvalId: string }>(
+          `/workspaces/${workspaceId}/previews/${previewId}/decision`,
+          { body: JSON.stringify({ decision }), method: "POST" }
+        ),
+      async () => {
+        setReview(
+          await studioApi<Review>(
+            `/workspaces/${workspaceId}/previews/${previewId}/review`
+          )
+        );
+        const versions = await studioApi<{ previews: PreviewVersion[] }>(
+          `/workspaces/${workspaceId}/prospects/${chosen.id}/previews`
+        );
+        setPreviewVersions(versions.previews);
+        setNotice(
+          `Private concept ${decision}. No public deployment or outreach occurred.`
         );
       }
     );
@@ -678,7 +819,42 @@ export function StudioApp() {
               >
                 <Plus size={17} /> Add prospect
               </button>
-              <p>Discovery automation is not enabled.</p>
+              <form
+                className="studio-discovery-form"
+                onSubmit={discoverLicense}
+              >
+                <label className="studio-eyebrow" htmlFor="license-lookup">
+                  HISTORICAL MINNEAPOLIS LICENSE RECORDS
+                </label>
+                <input
+                  aria-label="Historical business name search"
+                  id="license-lookup"
+                  maxLength={80}
+                  minLength={3}
+                  onChange={(e) => setDiscoveryQuery(e.target.value)}
+                  placeholder="Search business name"
+                  required
+                  value={discoveryQuery}
+                />
+                <input
+                  aria-label="License identifier to resolve multiple results"
+                  maxLength={200}
+                  onChange={(e) => setDiscoveryExternalId(e.target.value)}
+                  placeholder="Optional license ID for matches"
+                  value={discoveryExternalId}
+                />
+                <button
+                  className="studio-btn-secondary"
+                  disabled={!isOperator || busy !== null}
+                  type="submit"
+                >
+                  <Search size={15} /> Import sourced record
+                </button>
+                <p>
+                  Historical public records are not proof of a current business
+                  or active license.
+                </p>
+              </form>
             </div>
           </aside>
         ) : null}
@@ -807,12 +983,58 @@ export function StudioApp() {
                 )}{" "}
                 Generate private concept
               </button>
+              {previewVersions.length > 0 ? (
+                <div className="studio-info-block">
+                  <span>VERSION HISTORY</span>
+                  {previewVersions.map((version) => (
+                    <button
+                      className="studio-text-button"
+                      disabled={busy !== null}
+                      key={version.previewId}
+                      onClick={() => void loadPreview(version.previewId)}
+                      type="button"
+                    >
+                      Version {version.version} · {version.state}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {preview ? (
                 <div className="studio-preview-result">
                   <div>
                     <b>Private preview · v{preview.version}</b>
-                    <span>NOT PUBLISHED</span>
+                    <span>{review?.state ?? "DRAFT"} · NOT PUBLISHED</span>
                   </div>
+                  {isOperator && !review ? (
+                    <button
+                      className="studio-btn-secondary"
+                      disabled={busy !== null}
+                      onClick={() => void requestReview()}
+                      type="button"
+                    >
+                      Request owner review
+                    </button>
+                  ) : null}
+                  {current?.role === "owner" && review?.state === "pending" ? (
+                    <div>
+                      <button
+                        className="studio-btn-primary"
+                        disabled={busy !== null}
+                        onClick={() => void decideReview("approved")}
+                        type="button"
+                      >
+                        Approve private concept
+                      </button>
+                      <button
+                        className="studio-btn-secondary"
+                        disabled={busy !== null}
+                        onClick={() => void decideReview("rejected")}
+                        type="button"
+                      >
+                        Reject concept
+                      </button>
+                    </div>
+                  ) : null}
                   <iframe
                     loading="lazy"
                     sandbox=""
