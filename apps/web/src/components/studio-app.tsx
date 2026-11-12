@@ -5,6 +5,7 @@ import {
   ArrowRight,
   BadgeCheck,
   Building2,
+  CalendarDays,
   ChevronDown,
   CircleHelp,
   Database,
@@ -12,14 +13,20 @@ import {
   Eye,
   FilePlus2,
   Globe2,
+  Inbox,
   Layers3,
   LoaderCircle,
   LockKeyhole,
+  LogOut,
   MapPin,
+  Monitor,
+  PanelsTopLeft,
   Plus,
   RefreshCcw,
   Search,
   Shield,
+  SlidersHorizontal,
+  Smartphone,
   Sparkles,
   Workflow,
   X,
@@ -312,6 +319,19 @@ export function StudioApp() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [sidebar, setSidebar] = useState(true);
+  const [view, setView] = useState<"map" | "calendar" | "inbox" | "studio">(
+    "map"
+  );
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterWebsite, setFilterWebsite] = useState<
+    "all" | "unknown" | "reported"
+  >("all");
+  const [studioDevice, setStudioDevice] = useState<"desktop" | "mobile">(
+    "desktop"
+  );
+  const [mobileSheetExpanded, setMobileSheetExpanded] = useState(false);
+  const [sheetTouchY, setSheetTouchY] = useState<number | null>(null);
+  const [mobileMeasuresOpen, setMobileMeasuresOpen] = useState(false);
 
   const refreshWorkspaces = useCallback(async () => {
     const result = await studioApi<{ workspaces: Workspace[] }>("/workspaces");
@@ -384,12 +404,17 @@ export function StudioApp() {
   const chosen = prospects.find((p) => p.id === selected);
   const filtered = useMemo(
     () =>
-      prospects.filter((p) =>
-        `${p.name} ${p.physicalAddress ?? ""}`
-          .toLowerCase()
-          .includes(query.toLowerCase())
+      prospects.filter(
+        (p) =>
+          (filterWebsite === "all" ||
+            (filterWebsite === "unknown"
+              ? p.websiteStatus === "unknown"
+              : p.websiteStatus !== "unknown")) &&
+          `${p.name} ${p.physicalAddress ?? ""}`
+            .toLowerCase()
+            .includes(query.toLowerCase())
       ),
-    [prospects, query]
+    [prospects, query, filterWebsite]
   );
   const statusJobs = chosen
     ? jobs.filter((j) => j.prospectId === chosen.id)
@@ -631,24 +656,71 @@ export function StudioApp() {
             P<span>.</span>
           </span>
           <span>
-            PROSPECT <b>STUDIO</b>
+            Prospect <b>Studio</b>
           </span>
         </div>
         <div className="studio-top-center">
           <span className="studio-environment">
-            <span className="studio-live-dot" /> PRIVATE WORKSPACE
+            <span className="studio-live-dot" /> MINNEAPOLIS–ST. PAUL
           </span>
           <span className="studio-top-divider" />
-          <span className="studio-top-breadcrumb">Prospect intelligence</span>
+          <span className="studio-top-breadcrumb">
+            Prospect intelligence · Twin Cities
+          </span>
         </div>
+        <nav aria-label="Main navigation" className="prototype-top-nav">
+          <button
+            className={view === "map" ? "active" : ""}
+            onClick={() => setView("map")}
+            type="button"
+          >
+            <MapPin size={16} /> Map
+          </button>
+          <button
+            className={view === "calendar" ? "active" : ""}
+            onClick={() => setView("calendar")}
+            type="button"
+          >
+            <CalendarDays size={16} /> Calendar
+          </button>
+          <button
+            className={view === "inbox" ? "active" : ""}
+            onClick={() => setView("inbox")}
+            type="button"
+          >
+            <Inbox size={16} /> Inbox
+          </button>
+          <button
+            className={view === "studio" ? "active" : ""}
+            onClick={() => setView("studio")}
+            type="button"
+          >
+            <PanelsTopLeft size={16} /> Studio
+          </button>
+        </nav>
         <div className="studio-top-actions">
           <button
             aria-label="Toggle workspace panel"
-            className="studio-icon-button"
+            className="studio-icon-button prototype-desktop-sidebar-toggle"
             onClick={() => setSidebar((x) => !x)}
             type="button"
           >
             <Layers3 size={18} />
+          </button>
+          <button
+            aria-label="Search prospects"
+            className="prototype-mobile-search"
+            onClick={() => {
+              setView("map");
+              setMobileSheetExpanded(true);
+              setTimeout(
+                () => document.getElementById("prospect-search")?.focus(),
+                180
+              );
+            }}
+            type="button"
+          >
+            <Search size={19} />
           </button>
           <div className="studio-avatar">
             {session.user.email?.slice(0, 1).toUpperCase() ?? "U"}
@@ -662,7 +734,8 @@ export function StudioApp() {
             }
             type="button"
           >
-            Sign out
+            <LogOut size={15} />
+            <span>Sign out</span>
           </button>
         </div>
       </header>
@@ -720,292 +793,553 @@ export function StudioApp() {
           </button>
         </div>
       ) : null}
-      <div className="studio-main-grid">
-        {sidebar ? (
-          <aside className="studio-sidebar">
-            <div className="studio-sidebar-heading">
-              <span className="studio-eyebrow">PIPELINE / WORKSPACE</span>
-              <h1>Prospect intelligence</h1>
-              <p>
-                Evidence first. Every website concept starts with sourced
-                business facts.
-              </p>
-            </div>
-            <div className="studio-stats">
-              <div>
-                <strong>{stageCounts.all}</strong>
-                <span>PROSPECTS</span>
-              </div>
-              <div>
-                <strong>{stageCounts.unknown}</strong>
-                <span>UNKNOWN WEB</span>
-              </div>
-              <div>
-                <strong>{stageCounts.queued}</strong>
-                <span>QUEUED</span>
-              </div>
-            </div>
-            <div className="studio-list-heading">
-              <h2>Prospects</h2>
+      {view === "map" ? (
+        <div
+          className={`studio-main-grid prototype-main-grid ${chosen ? "has-detail" : "no-detail"}`}
+        >
+          {sidebar ? (
+            <aside
+              className={`studio-sidebar ${mobileSheetExpanded ? "mobile-expanded" : ""}`}
+            >
               <button
-                aria-label="Refresh prospects"
-                className="studio-icon-button"
-                onClick={() => workspaceId && void refresh(workspaceId)}
+                aria-expanded={mobileSheetExpanded}
+                aria-label={
+                  mobileSheetExpanded
+                    ? "Collapse prospects"
+                    : "Expand prospects"
+                }
+                className="prototype-sheet-grip"
+                onClick={() => setMobileSheetExpanded((v) => !v)}
+                onTouchEnd={(e) => {
+                  if (
+                    sheetTouchY !== null &&
+                    e.changedTouches[0] &&
+                    Math.abs(e.changedTouches[0].clientY - sheetTouchY) > 35
+                  ) {
+                    setMobileSheetExpanded(
+                      e.changedTouches[0].clientY < sheetTouchY
+                    );
+                  }
+                }}
+                onTouchStart={(e) =>
+                  setSheetTouchY(e.touches[0]?.clientY ?? null)
+                }
                 type="button"
               >
-                <RefreshCcw size={15} />
+                <span />
+                <span className="prototype-grip-label">
+                  {mobileSheetExpanded ? "Collapse" : "Explore prospects"}
+                </span>
               </button>
-            </div>
-            <label className="studio-search">
-              <Search size={17} />
-              <input
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search businesses…"
-                value={query}
-              />
-            </label>
-            <div className="studio-list-items">
-              {workspaceId ? (
-                filtered.length === 0 ? (
-                  <div className="studio-empty-list">
-                    <Building2 size={26} />
-                    <p>
-                      No matching prospects. Import a business to start the
-                      pipeline.
-                    </p>
-                  </div>
-                ) : (
-                  filtered.map((p) => (
-                    <button
-                      className={`studio-prospect-row ${p.id === selected ? "selected" : ""}`}
-                      key={p.id}
-                      onClick={() => {
-                        setSelected(p.id);
-                        setPreview(null);
-                      }}
-                      type="button"
-                    >
-                      <span className="studio-prospect-icon">
-                        {p.name.slice(0, 1).toUpperCase()}
-                      </span>
-                      <span>
-                        <strong>{p.name}</strong>
-                        <small>
-                          {p.physicalAddress ?? "Address not reported"}
-                        </small>
-                        <em>
-                          {p.websiteStatus === "unknown"
-                            ? "Website unknown"
-                            : "Reported website"}
-                        </em>
-                      </span>
-                      <ArrowRight size={14} />
-                    </button>
-                  ))
-                )
-              ) : (
-                <div className="studio-empty-list">
-                  <Database size={26} />
-                  <p>Create or select a workspace to begin.</p>
+              <div className="studio-sidebar-heading">
+                <span className="studio-eyebrow">YOUR PIPELINE</span>
+                <h1>
+                  Prospects <span>{stageCounts.all}</span>
+                </h1>
+                <p>Find the opportunity. Build the proof.</p>
+              </div>
+              <div className="studio-stats">
+                <div>
+                  <strong>{stageCounts.all}</strong>
+                  <span>PROSPECTS</span>
                 </div>
-              )}
-            </div>
-            <div className="studio-sidebar-footer">
-              <button
-                className="studio-btn-primary"
-                disabled={!isOperator}
-                onClick={() => setShowCreate(true)}
-                type="button"
-              >
-                <Plus size={17} /> Add prospect
-              </button>
-              <form
-                className="studio-discovery-form"
-                onSubmit={discoverLicense}
-              >
-                <label className="studio-eyebrow" htmlFor="license-lookup">
-                  HISTORICAL MINNEAPOLIS LICENSE RECORDS
-                </label>
-                <input
-                  aria-label="Historical business name search"
-                  id="license-lookup"
-                  maxLength={80}
-                  minLength={3}
-                  onChange={(e) => setDiscoveryQuery(e.target.value)}
-                  placeholder="Search business name"
-                  required
-                  value={discoveryQuery}
-                />
-                <input
-                  aria-label="License identifier to resolve multiple results"
-                  maxLength={200}
-                  onChange={(e) => setDiscoveryExternalId(e.target.value)}
-                  placeholder="Optional license ID for matches"
-                  value={discoveryExternalId}
-                />
-                <button
-                  className="studio-btn-secondary"
-                  disabled={!isOperator || busy !== null}
-                  type="submit"
-                >
-                  <Search size={15} /> Import sourced record
+                <div>
+                  <strong>{stageCounts.unknown}</strong>
+                  <span>UNKNOWN WEB</span>
+                </div>
+                <div>
+                  <strong>{stageCounts.queued}</strong>
+                  <span>QUEUED</span>
+                </div>
+              </div>
+              <div className="prototype-side-actions">
+                <button onClick={() => setView("inbox")} type="button">
+                  <Inbox size={16} /> Inbox <span>0</span>
                 </button>
-                <p>
-                  Historical public records are not proof of a current business
-                  or active license.
-                </p>
-              </form>
-            </div>
-          </aside>
-        ) : null}
-        <section className="studio-map-panel">
-          <StudioMap />
-          <div className="studio-map-top">
-            <span>
-              <MapPin size={15} /> Minneapolis–Saint Paul
-            </span>
-            <span>BASE MAP / OSM</span>
-          </div>
-          <div className="studio-map-legend">
-            <MapPin size={15} />
-            <span>
-              Map pins require verified coordinates; none are inferred from
-              addresses.
-            </span>
-          </div>
-        </section>
-        <aside className="studio-inspector">
-          {chosen ? (
-            <>
-              <div className="studio-inspector-head">
-                <span className="studio-eyebrow">PROSPECT / INSPECTOR</span>
-                <span className="studio-inspector-status">REPORTED</span>
+                <button onClick={() => setShowFilters((v) => !v)} type="button">
+                  <SlidersHorizontal size={16} /> Filters
+                </button>
               </div>
-              <h2>{chosen.name}</h2>
-              <p className="studio-inspector-address">
-                <MapPin size={16} />
-                {chosen.physicalAddress ?? "Location not reported"}
-              </p>
-              <div className="studio-info-block">
-                <span>ONLINE PRESENCE</span>
-                <strong>
-                  {chosen.websiteStatus === "unknown"
-                    ? "Not established"
-                    : "Reported website"}
-                </strong>
-                {chosen.websiteUrl ? (
-                  <a href={chosen.websiteUrl} rel="noreferrer" target="_blank">
-                    {chosen.websiteUrl}
-                    <ExternalLink size={13} />
-                  </a>
-                ) : (
-                  <p>
-                    Absence of a reported website does not prove a business has
-                    no website.
-                  </p>
-                )}
-              </div>
-              <div className="studio-info-block">
-                <span>SOURCE CONFIDENCE</span>
-                <div className="studio-source">
-                  <Shield size={18} />
-                  <div>
-                    <strong>Operator-reported</strong>
-                    <p>
-                      Not externally verified. Inspect source evidence before
-                      publishing claims.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="studio-pipeline-block">
-                <span className="studio-eyebrow">WORKFLOW ACTIONS</span>
-                <div className="studio-step">
-                  <span className="studio-step-icon done">
-                    <BadgeCheck size={16} />
-                  </span>
-                  <div>
-                    <strong>01 / Discovered</strong>
-                    <p>Durable prospect record</p>
-                  </div>
-                </div>
-                <div className="studio-step">
-                  <span className="studio-step-icon">
-                    <Activity size={17} />
-                  </span>
-                  <div>
-                    <strong>02 / Enrichment</strong>
-                    <p>{statusJobs.at(0)?.state ?? "Not requested"}</p>
-                  </div>
-                </div>
-                <div className="studio-step">
-                  <span className="studio-step-icon">
-                    <Globe2 size={17} />
-                  </span>
-                  <div>
-                    <strong>03 / Website concept</strong>
-                    <p>Private, versioned draft</p>
-                  </div>
-                </div>
-                <div className="studio-step">
-                  <span className="studio-step-icon">
-                    <Eye size={17} />
-                  </span>
-                  <div>
-                    <strong>04 / Review</strong>
-                    <p>No external publication or outreach</p>
-                  </div>
-                </div>
-              </div>
-              <button
-                className="studio-btn-secondary"
-                disabled={!isOperator || busy !== null}
-                onClick={() => void enqueue(chosen.id)}
-                type="button"
-              >
-                {busy === "enqueue" ? (
-                  <LoaderCircle className="spin" size={17} />
-                ) : (
-                  <Workflow size={17} />
-                )}{" "}
-                Queue enrichment
-              </button>
-              <button
-                className="studio-btn-primary"
-                disabled={!isOperator || busy !== null}
-                onClick={() => void createPreview(chosen.id)}
-                type="button"
-              >
-                {busy === "preview" ? (
-                  <LoaderCircle className="spin" size={17} />
-                ) : (
-                  <Sparkles size={17} />
-                )}{" "}
-                Generate private concept
-              </button>
-              {previewVersions.length > 0 ? (
-                <div className="studio-info-block">
-                  <span>VERSION HISTORY</span>
-                  {previewVersions.map((version) => (
-                    <button
-                      className="studio-text-button"
-                      disabled={busy !== null}
-                      key={version.previewId}
-                      onClick={() => void loadPreview(version.previewId)}
-                      type="button"
+              {showFilters ? (
+                <div className="prototype-filters">
+                  <label>
+                    Website status
+                    <select
+                      onChange={(e) =>
+                        setFilterWebsite(
+                          e.target.value as "all" | "unknown" | "reported"
+                        )
+                      }
+                      value={filterWebsite}
                     >
-                      Version {version.version} · {version.state}
-                    </button>
-                  ))}
+                      <option value="all">All records</option>
+                      <option value="unknown">Unknown</option>
+                      <option value="reported">Reported website</option>
+                    </select>
+                  </label>
+                  <button
+                    className="studio-text-button"
+                    onClick={() => {
+                      setQuery("");
+                      setFilterWebsite("all");
+                    }}
+                    type="button"
+                  >
+                    Clear all
+                  </button>
                 </div>
               ) : null}
-              {preview ? (
-                <div className="studio-preview-result">
-                  <div>
-                    <b>Private preview · v{preview.version}</b>
-                    <span>{review?.state ?? "DRAFT"} · NOT PUBLISHED</span>
+              <div className="studio-list-heading">
+                <h2>
+                  {filtered.length} shown · {prospects.length} total
+                </h2>
+                <button
+                  aria-label="Refresh prospects"
+                  className="studio-icon-button"
+                  onClick={() => workspaceId && void refresh(workspaceId)}
+                  type="button"
+                >
+                  <RefreshCcw size={15} />
+                </button>
+              </div>
+              <label className="studio-search">
+                <Search size={17} />
+                <input
+                  id="prospect-search"
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search businesses…"
+                  value={query}
+                />
+              </label>
+              <div className="studio-list-items">
+                {workspaceId ? (
+                  filtered.length === 0 ? (
+                    <div className="studio-empty-list">
+                      <Building2 size={26} />
+                      <p>
+                        No matching prospects. Import a business to start the
+                        pipeline.
+                      </p>
+                    </div>
+                  ) : (
+                    filtered.map((p) => (
+                      <button
+                        className={`studio-prospect-row ${p.id === selected ? "selected" : ""}`}
+                        key={p.id}
+                        onClick={() => {
+                          setSelected(p.id);
+                          setMobileSheetExpanded(false);
+                          setPreview(null);
+                        }}
+                        type="button"
+                      >
+                        <span className="studio-prospect-icon">
+                          {p.name.slice(0, 1).toUpperCase()}
+                        </span>
+                        <span>
+                          <strong>{p.name}</strong>
+                          <small>
+                            {p.physicalAddress ?? "Address not reported"}
+                          </small>
+                          <em>
+                            {p.websiteStatus === "unknown"
+                              ? "Website unknown"
+                              : "Reported website"}
+                          </em>
+                        </span>
+                        <ArrowRight size={14} />
+                      </button>
+                    ))
+                  )
+                ) : (
+                  <div className="studio-empty-list">
+                    <Database size={26} />
+                    <p>Create or select a workspace to begin.</p>
                   </div>
-                  {isOperator && !review ? (
+                )}
+              </div>
+              <div className="studio-sidebar-footer">
+                <div className="prototype-batch">
+                  <span>{stageCounts.queued} queued</span>
+                  <span>
+                    {jobs.filter((j) => j.state === "running").length} running
+                  </span>
+                  <span>
+                    {jobs.filter((j) => j.state === "failed").length} blocked
+                  </span>
+                </div>
+                <button
+                  className="studio-btn-primary"
+                  disabled={!isOperator}
+                  onClick={() => setShowCreate(true)}
+                  type="button"
+                >
+                  <Plus size={17} /> Add prospect
+                </button>
+                <form
+                  className="studio-discovery-form"
+                  onSubmit={discoverLicense}
+                >
+                  <label className="studio-eyebrow" htmlFor="license-lookup">
+                    HISTORICAL MINNEAPOLIS LICENSE RECORDS
+                  </label>
+                  <input
+                    aria-label="Historical business name search"
+                    id="license-lookup"
+                    maxLength={80}
+                    minLength={3}
+                    onChange={(e) => setDiscoveryQuery(e.target.value)}
+                    placeholder="Search business name"
+                    required
+                    value={discoveryQuery}
+                  />
+                  <input
+                    aria-label="License identifier to resolve multiple results"
+                    maxLength={200}
+                    onChange={(e) => setDiscoveryExternalId(e.target.value)}
+                    placeholder="Optional license ID for matches"
+                    value={discoveryExternalId}
+                  />
+                  <button
+                    className="studio-btn-secondary"
+                    disabled={!isOperator || busy !== null}
+                    type="submit"
+                  >
+                    <Search size={15} /> Import sourced record
+                  </button>
+                  <p>
+                    Historical public records are not proof of a current
+                    business or active license.
+                  </p>
+                </form>
+              </div>
+            </aside>
+          ) : null}
+          <section className="studio-map-panel">
+            <StudioMap />
+            <div className="prototype-map-glass-chip">
+              <span className="studio-live-dot" /> {filtered.length} prospects
+              in view
+            </div>
+            <div
+              className={[
+                "prototype-five-measures",
+                mobileMeasuresOpen ? "mobile-measures-open" : "",
+              ].join(" ")}
+            >
+              <button
+                aria-expanded={mobileMeasuresOpen}
+                className="prototype-measures-toggle"
+                onClick={() => setMobileMeasuresOpen((x) => !x)}
+                type="button"
+              >
+                <Activity size={15} /> Five measures <ChevronDown size={15} />
+              </button>
+              <div className="prototype-five-measures-list">
+                {[
+                  "Cost per qualified prospect",
+                  "Demo-to-reply",
+                  "Reply-to-call · call-to-close",
+                  "Payment to live site",
+                  "Sends on trigger event",
+                ].map((t) => (
+                  <div key={t}>
+                    <span>{t}</span>
+                    <b>No data yet</b>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="studio-map-top">
+              <span>
+                <MapPin size={15} /> Minneapolis–Saint Paul
+              </span>
+              <span>BASE MAP / OSM</span>
+            </div>
+            <div className="studio-map-legend">
+              <MapPin size={15} />
+              <span>
+                Map pins require verified coordinates; none are inferred from
+                addresses.
+              </span>
+            </div>
+          </section>
+          {chosen ? (
+            <aside className="studio-inspector">
+              {chosen ? (
+                <>
+                  <div className="studio-inspector-head">
+                    <span className="studio-eyebrow">PROSPECT / INSPECTOR</span>
+                    <span className="studio-inspector-status">REPORTED</span>
+                  </div>
+                  <button
+                    aria-label="Close prospect details"
+                    className="prototype-close-inspector"
+                    onClick={() => setSelected(null)}
+                    type="button"
+                  >
+                    <X size={17} />
+                  </button>
+                  <h2>{chosen.name}</h2>
+                  <div className="prototype-inspector-tabs">
+                    <span>Overview</span>
+                    <button onClick={() => setView("studio")} type="button">
+                      Design
+                    </button>
+                    <button onClick={() => setView("inbox")} type="button">
+                      Inbox
+                    </button>
+                  </div>
+                  <p className="studio-inspector-address">
+                    <MapPin size={16} />
+                    {chosen.physicalAddress ?? "Location not reported"}
+                  </p>
+                  <div className="studio-info-block">
+                    <span>ONLINE PRESENCE</span>
+                    <strong>
+                      {chosen.websiteStatus === "unknown"
+                        ? "Not established"
+                        : "Reported website"}
+                    </strong>
+                    {chosen.websiteUrl ? (
+                      <a
+                        href={chosen.websiteUrl}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        {chosen.websiteUrl}
+                        <ExternalLink size={13} />
+                      </a>
+                    ) : (
+                      <p>
+                        Absence of a reported website does not prove a business
+                        has no website.
+                      </p>
+                    )}
+                  </div>
+                  <div className="studio-info-block">
+                    <span>SOURCE CONFIDENCE</span>
+                    <div className="studio-source">
+                      <Shield size={18} />
+                      <div>
+                        <strong>Operator-reported</strong>
+                        <p>
+                          Not externally verified. Inspect source evidence
+                          before publishing claims.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="studio-pipeline-block">
+                    <span className="studio-eyebrow">WORKFLOW ACTIONS</span>
+                    <div className="studio-step">
+                      <span className="studio-step-icon done">
+                        <BadgeCheck size={16} />
+                      </span>
+                      <div>
+                        <strong>01 / Discovered</strong>
+                        <p>Durable prospect record</p>
+                      </div>
+                    </div>
+                    <div className="studio-step">
+                      <span className="studio-step-icon">
+                        <Activity size={17} />
+                      </span>
+                      <div>
+                        <strong>02 / Enrichment</strong>
+                        <p>{statusJobs.at(0)?.state ?? "Not requested"}</p>
+                      </div>
+                    </div>
+                    <div className="studio-step">
+                      <span className="studio-step-icon">
+                        <Globe2 size={17} />
+                      </span>
+                      <div>
+                        <strong>03 / Website concept</strong>
+                        <p>Private, versioned draft</p>
+                      </div>
+                    </div>
+                    <div className="studio-step">
+                      <span className="studio-step-icon">
+                        <Eye size={17} />
+                      </span>
+                      <div>
+                        <strong>04 / Review</strong>
+                        <p>No external publication or outreach</p>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    className="studio-btn-secondary"
+                    disabled={!isOperator || busy !== null}
+                    onClick={() => void enqueue(chosen.id)}
+                    type="button"
+                  >
+                    {busy === "enqueue" ? (
+                      <LoaderCircle className="spin" size={17} />
+                    ) : (
+                      <Workflow size={17} />
+                    )}{" "}
+                    Queue enrichment
+                  </button>
+                  <button
+                    className="studio-btn-primary"
+                    disabled={!isOperator || busy !== null}
+                    onClick={() => void createPreview(chosen.id)}
+                    type="button"
+                  >
+                    {busy === "preview" ? (
+                      <LoaderCircle className="spin" size={17} />
+                    ) : (
+                      <Sparkles size={17} />
+                    )}{" "}
+                    Generate private concept
+                  </button>
+                  {previewVersions.length > 0 ? (
+                    <div className="studio-info-block">
+                      <span>VERSION HISTORY</span>
+                      {previewVersions.map((version) => (
+                        <button
+                          className="studio-text-button"
+                          disabled={busy !== null}
+                          key={version.previewId}
+                          onClick={() => void loadPreview(version.previewId)}
+                          type="button"
+                        >
+                          Version {version.version} · {version.state}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  {preview ? (
+                    <div className="studio-preview-result">
+                      <div>
+                        <b>Private preview · v{preview.version}</b>
+                        <span>{review?.state ?? "DRAFT"} · NOT PUBLISHED</span>
+                      </div>
+                      {isOperator && !review ? (
+                        <button
+                          className="studio-btn-secondary"
+                          disabled={busy !== null}
+                          onClick={() => void requestReview()}
+                          type="button"
+                        >
+                          Request owner review
+                        </button>
+                      ) : null}
+                      {current?.role === "owner" &&
+                      review?.state === "pending" ? (
+                        <div>
+                          <button
+                            className="studio-btn-primary"
+                            disabled={busy !== null}
+                            onClick={() => void decideReview("approved")}
+                            type="button"
+                          >
+                            Approve private concept
+                          </button>
+                          <button
+                            className="studio-btn-secondary"
+                            disabled={busy !== null}
+                            onClick={() => void decideReview("rejected")}
+                            type="button"
+                          >
+                            Reject concept
+                          </button>
+                        </div>
+                      ) : null}
+                      <iframe
+                        loading="lazy"
+                        sandbox=""
+                        srcDoc={preview.html}
+                        title={`Private draft for ${chosen.name}`}
+                      />
+                    </div>
+                  ) : null}
+                  <div className="studio-inspector-foot">
+                    <LockKeyhole size={15} /> No automatic sending or publishing
+                  </div>
+                </>
+              ) : (
+                <div className="studio-no-selection">
+                  <div className="studio-no-selection-symbol">
+                    <Layers3 size={32} />
+                  </div>
+                  <span className="studio-eyebrow">INSPECTOR</span>
+                  <h2>
+                    From signal
+                    <br />
+                    to website.
+                  </h2>
+                  <p>
+                    Select a prospect to inspect its provenance, queue
+                    enrichment, or generate a draft concept.
+                  </p>
+                  <div className="studio-no-selection-flow">
+                    <span>01 / DISCOVER</span>
+                    <span>02 / ENRICH</span>
+                    <span>03 / BUILD</span>
+                    <span>04 / REVIEW</span>
+                  </div>
+                </div>
+              )}
+            </aside>
+          ) : null}
+        </div>
+      ) : null}
+      {view === "studio" ? (
+        <section className="prototype-view-page">
+          <header className="prototype-page-header">
+            <span className="studio-eyebrow">DESIGN STUDIO</span>
+            <h1>Turn evidence into a first impression.</h1>
+            <p>
+              Private, versioned website concepts with owner-controlled
+              approvals.
+            </p>
+          </header>
+          <div className="prototype-studio-layout">
+            <aside className="prototype-studio-controls">
+              <h2>Studio workspace</h2>
+              <label>
+                Prospect
+                <select
+                  onChange={(e) => {
+                    setSelected(e.target.value || null);
+                    setPreview(null);
+                  }}
+                  value={selected ?? ""}
+                >
+                  <option value="">Select a prospect</option>
+                  {prospects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {chosen ? (
+                <>
+                  <p>{chosen.name}</p>
+                  <button
+                    className="studio-btn-primary"
+                    disabled={!isOperator || busy !== null}
+                    onClick={() => void createPreview(chosen.id)}
+                    type="button"
+                  >
+                    <Sparkles size={16} /> Generate new version
+                  </button>
+                  <span className="studio-eyebrow">VERSION HISTORY</span>
+                  {previewVersions.map((v) => (
+                    <button
+                      className="studio-text-button"
+                      key={v.previewId}
+                      onClick={() => void loadPreview(v.previewId)}
+                      type="button"
+                    >
+                      Version {v.version} · {v.state}
+                    </button>
+                  ))}
+                  {preview && !review && isOperator ? (
                     <button
                       className="studio-btn-secondary"
                       disabled={busy !== null}
@@ -1015,8 +1349,10 @@ export function StudioApp() {
                       Request owner review
                     </button>
                   ) : null}
-                  {current?.role === "owner" && review?.state === "pending" ? (
-                    <div>
+                  {preview &&
+                  current?.role === "owner" &&
+                  review?.state === "pending" ? (
+                    <>
                       <button
                         className="studio-btn-primary"
                         disabled={busy !== null}
@@ -1031,47 +1367,189 @@ export function StudioApp() {
                         onClick={() => void decideReview("rejected")}
                         type="button"
                       >
-                        Reject concept
+                        Reject
                       </button>
-                    </div>
+                    </>
                   ) : null}
-                  <iframe
-                    loading="lazy"
-                    sandbox=""
-                    srcDoc={preview.html}
-                    title={`Private draft for ${chosen.name}`}
-                  />
+                  <p>
+                    Review: {review?.state ?? "Draft"} · No public publication
+                  </p>
+                </>
+              ) : (
+                <p>Select a saved prospect to begin designing.</p>
+              )}
+            </aside>
+            <div className="prototype-studio-canvas">
+              <div className="prototype-canvas-bar">
+                <strong>{chosen?.name ?? "Design canvas"}</strong>
+                <div>
+                  <button
+                    className={studioDevice === "desktop" ? "active" : ""}
+                    onClick={() => setStudioDevice("desktop")}
+                    type="button"
+                  >
+                    <Monitor size={16} /> Desktop
+                  </button>
+                  <button
+                    className={studioDevice === "mobile" ? "active" : ""}
+                    onClick={() => setStudioDevice("mobile")}
+                    type="button"
+                  >
+                    <Smartphone size={16} /> Mobile
+                  </button>
                 </div>
-              ) : null}
-              <div className="studio-inspector-foot">
-                <LockKeyhole size={15} /> No automatic sending or publishing
               </div>
-            </>
-          ) : (
-            <div className="studio-no-selection">
-              <div className="studio-no-selection-symbol">
-                <Layers3 size={32} />
-              </div>
-              <span className="studio-eyebrow">INSPECTOR</span>
+              {preview ? (
+                <iframe
+                  className={
+                    studioDevice === "mobile" ? "prototype-mobile-preview" : ""
+                  }
+                  sandbox=""
+                  srcDoc={preview.html}
+                  title="Private generated website preview"
+                />
+              ) : (
+                <div className="prototype-studio-empty">
+                  <PanelsTopLeft size={40} />
+                  <h2>Your design canvas</h2>
+                  <p>Generate a private website draft to preview it here.</p>
+                </div>
+              )}
+              <footer>
+                <LockKeyhole size={14} /> Secure preview · Not published
+              </footer>
+            </div>
+          </div>
+        </section>
+      ) : null}
+      {view === "inbox" ? (
+        <section className="prototype-view-page">
+          <header className="prototype-page-header">
+            <span className="studio-eyebrow">COMMUNICATIONS CENTER</span>
+            <h1>Inbox</h1>
+            <p>Prospect conversations and follow-up activity.</p>
+          </header>
+          <div className="prototype-metrics">
+            {["Unread", "Needs reply", "Follow-ups", "Approvals"].map(
+              (label) => (
+                <div key={label}>
+                  <strong>0</strong>
+                  <span>{label}</span>
+                </div>
+              )
+            )}
+          </div>
+          <div className="prototype-empty-state">
+            <Inbox size={38} />
+            <h2>No threads yet</h2>
+            <p>
+              Nobody has been contacted. Messaging is not connected to this
+              staging workspace.
+            </p>
+            <button
+              className="studio-btn-secondary"
+              onClick={() => setView("map")}
+              type="button"
+            >
+              Browse prospects
+            </button>
+          </div>
+        </section>
+      ) : null}
+      {view === "calendar" ? (
+        <section className="prototype-view-page">
+          <header className="prototype-page-header">
+            <span className="studio-eyebrow">PROSPECT RELATIONSHIPS</span>
+            <h1>Calendar</h1>
+            <p>Plan calls and track meetings once scheduling is connected.</p>
+          </header>
+          <div className="prototype-calendar">
+            <div className="prototype-calendar-body">
               <h2>
-                From signal
-                <br />
-                to website.
+                {new Date().toLocaleDateString("en-US", {
+                  month: "long",
+                  year: "numeric",
+                })}
               </h2>
-              <p>
-                Select a prospect to inspect its provenance, queue enrichment,
-                or generate a draft concept.
-              </p>
-              <div className="studio-no-selection-flow">
-                <span>01 / DISCOVER</span>
-                <span>02 / ENRICH</span>
-                <span>03 / BUILD</span>
-                <span>04 / REVIEW</span>
+              <div className="prototype-calendar-week">
+                {Array.from({ length: 7 }, (_, i) => {
+                  const d = new Date();
+                  d.setDate(d.getDate() - d.getDay() + i);
+                  return (
+                    <div key={d.toISOString().slice(0, 10)}>
+                      <small>
+                        {d.toLocaleDateString("en-US", { weekday: "short" })}
+                      </small>
+                      <strong>{d.getDate()}</strong>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="prototype-empty-state">
+                <CalendarDays size={34} />
+                <h2>No scheduled calls</h2>
+                <p>Calendar integration has not been configured.</p>
               </div>
             </div>
-          )}
-        </aside>
-      </div>
+            <aside className="prototype-calendar-plan">
+              <span className="studio-eyebrow">PLAN A PHONE CALL</span>
+              <h2>Meeting preparation</h2>
+              <p>Connect scheduling to enable persistent appointments.</p>
+              <label>
+                Prospect
+                <select disabled>
+                  <option>Select after integration</option>
+                </select>
+              </label>
+              <label>
+                Date
+                <input disabled type="date" />
+              </label>
+              <label>
+                Time
+                <input disabled type="time" />
+              </label>
+              <button className="studio-btn-primary" disabled type="button">
+                Scheduling unavailable
+              </button>
+            </aside>
+          </div>
+        </section>
+      ) : null}
+      <nav aria-label="Mobile navigation" className="prototype-mobile-nav">
+        <button
+          className={view === "map" ? "active" : ""}
+          onClick={() => setView("map")}
+          type="button"
+        >
+          <MapPin size={20} />
+          Map
+        </button>
+        <button
+          className={view === "inbox" ? "active" : ""}
+          onClick={() => setView("inbox")}
+          type="button"
+        >
+          <Inbox size={20} />
+          Inbox
+        </button>
+        <button
+          className={view === "calendar" ? "active" : ""}
+          onClick={() => setView("calendar")}
+          type="button"
+        >
+          <CalendarDays size={20} />
+          Calendar
+        </button>
+        <button
+          className={view === "studio" ? "active" : ""}
+          onClick={() => setView("studio")}
+          type="button"
+        >
+          <PanelsTopLeft size={20} />
+          Studio
+        </button>
+      </nav>
       <footer className="studio-bottom">
         <span>
           <span className="studio-live-dot" /> STUDIO FOUNDATION

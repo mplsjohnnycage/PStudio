@@ -24,9 +24,11 @@ export function StudioMap() {
           layers: [{ id: "osm-raster", source: "osm", type: "raster" }],
           sources: {
             osm: {
-              attribution: "© OpenStreetMap contributors",
+              attribution: "© OpenStreetMap contributors · © CARTO",
               tileSize: 256,
-              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+              tiles: [
+                "https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+              ],
               type: "raster",
             },
           },
