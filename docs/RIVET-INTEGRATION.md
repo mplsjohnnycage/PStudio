@@ -6,7 +6,7 @@
 
 - `apps/worker`: `rivetkit@3.1.1` and `@rivet-dev/workflows@1.1.1`, pinned in the lockfile.
 - `src/registry.ts`: a keyed Rivet workflow per `[workspaceId, jobId]`. It consumes `commands` queue messages via a recorded workflow step. The worker does not execute jobs or make external calls yet.
-- `src/transitions.ts`: deterministic job state machine supporting deduplicated submissions, explicit approval gate, start, bounded retries (max 20), completion, failure, cancellation, and terminal-state immutability.
+- `src/transitions.ts`: deterministic job state machine supporting deduplicated submissions, explicit approval gate, start, bounded retries (max 20), attempt-matched completion (rejecting stale retry results), failure, cancellation, and terminal-state immutability.
 - `src/index.ts`: **fail-closed** process entry. The worker cannot start without an explicit local-dev opt-in, and refuses to start in production until a scoped-authenticated private control plane has been configured.
 
 ## Responsibility boundaries
@@ -18,10 +18,10 @@
 
 ## Verification
 
-- `npm run test`: 16 API/database tests + 3 Rivet state-machine unit tests pass.
+- `npm run test`: 16 API/database tests + 4 Rivet state-machine unit tests pass.
 - `npm run check-types`: includes Rivet worker.
 - `npm run build`: compiles Rivet worker and existing app.
-- `npm run test:integration -w @prospect-studio/worker`: real `rivetkit/test` registry workflow test. **One successful end-to-end local run was observed after an orphaned test-owned `rivet-services` process was cleared. Further runs intermittently fail with registry 503 `starting` during local control-plane bootstrap.** Do not mark Rivet as production-ready until this is reproducible in isolated CI and a real controlled restart test succeeds.
+- `npm run test:integration -w @prospect-studio/worker`: real `rivetkit/test` registry workflow test, including stale-attempt rejection during a retry. **One successful end-to-end local run was observed after an orphaned test-owned `rivet-services` process was cleared. Further runs intermittently fail with registry 503 `starting` during local control-plane bootstrap.** Do not mark Rivet as production-ready until this is reproducible in isolated CI and a real controlled restart test succeeds.
 
 ## Next required integration
 

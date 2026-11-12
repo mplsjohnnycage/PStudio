@@ -26,7 +26,7 @@ export type JobCommand =
     }
   | { type: "decision"; jobId: string; approved: boolean }
   | { type: "start" }
-  | { type: "finish"; jobId: string; ok: boolean }
+  | { type: "finish"; jobId: string; attempt: number; ok: boolean }
   | { type: "cancel"; jobId: string };
 
 const IDENTIFIER = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
@@ -102,7 +102,13 @@ function finishJob(
   current: JobState,
   command: Extract<JobCommand, { type: "finish" }>
 ): JobState {
-  if (current.phase !== "running" || current.jobId !== command.jobId) {
+  if (
+    current.phase !== "running" ||
+    current.jobId !== command.jobId ||
+    !Number.isInteger(command.attempt) ||
+    command.attempt !== current.attempt ||
+    typeof command.ok !== "boolean"
+  ) {
     return current;
   }
   if (command.ok) {

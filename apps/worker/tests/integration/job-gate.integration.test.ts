@@ -28,7 +28,34 @@ test("Rivet workflow records approval, execution, and keyed isolation", async (t
   await expect
     .poll(async () => (await gate.getState()).phase, { timeout: 10_000 })
     .toBe("running");
-  await gate.send("commands", { jobId: "job-1", ok: true, type: "finish" });
+  await gate.send("commands", {
+    attempt: 1,
+    jobId: "job-1",
+    ok: false,
+    type: "finish",
+  });
+  await expect
+    .poll(async () => (await gate.getState()).phase, { timeout: 10_000 })
+    .toBe("retrying");
+  await gate.send("commands", { type: "start" });
+  await expect
+    .poll(async () => (await gate.getState()).attempt, { timeout: 10_000 })
+    .toBe(2);
+  await gate.send("commands", {
+    attempt: 1,
+    jobId: "job-1",
+    ok: false,
+    type: "finish",
+  });
+  await expect
+    .poll(async () => (await gate.getState()).phase, { timeout: 10_000 })
+    .toBe("running");
+  await gate.send("commands", {
+    attempt: 2,
+    jobId: "job-1",
+    ok: true,
+    type: "finish",
+  });
   await expect
     .poll(async () => (await gate.getState()).phase, { timeout: 10_000 })
     .toBe("completed");

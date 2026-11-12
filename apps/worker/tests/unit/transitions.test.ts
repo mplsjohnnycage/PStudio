@@ -85,6 +85,7 @@ describe("job transitions", () => {
     });
     const first = nextJobState(queued, { type: "start" });
     const retry = nextJobState(first, {
+      attempt: 1,
       jobId: "job",
       ok: false,
       type: "finish",
@@ -93,6 +94,7 @@ describe("job transitions", () => {
     const second = nextJobState(retry, { type: "start" });
     expect(second.attempt).toBe(2);
     const failed = nextJobState(second, {
+      attempt: 2,
       jobId: "job",
       ok: false,
       type: "finish",
@@ -109,4 +111,44 @@ describe("job transitions", () => {
       })
     ).toEqual(failed);
   });
+});
+
+test("late completion from an old attempt cannot terminate a newer retry", () => {
+  const idle: JobState = {
+    attempt: 0,
+    jobId: null,
+    maxAttempts: 0,
+    phase: "idle",
+    prospectId: null,
+  };
+  const queued = nextJobState(idle, {
+    jobId: "j",
+    maxAttempts: 2,
+    prospectId: "p",
+    requiresApproval: false,
+    type: "submit",
+  });
+  const first = nextJobState(queued, { type: "start" });
+  const retry = nextJobState(first, {
+    attempt: 1,
+    jobId: "j",
+    ok: false,
+    type: "finish",
+  });
+  const second = nextJobState(retry, { type: "start" });
+  expect(second.attempt).toBe(2);
+  const oldFailure = {
+    attempt: 1,
+    jobId: "j",
+    ok: false,
+    type: "finish" as const,
+  };
+  expect(nextJobState(second, oldFailure)).toEqual(second);
+  const completed = nextJobState(second, {
+    attempt: 2,
+    jobId: "j",
+    ok: true,
+    type: "finish",
+  });
+  expect(completed.phase).toBe("completed");
 });
