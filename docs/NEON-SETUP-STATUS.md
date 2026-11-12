@@ -38,3 +38,9 @@ At last Fly Sprite inventory, 20/20 were cold and 0 running. Cold Sprites do not
 1. Inspect `git status` on `setup/neon-services` in `/home/sprite/prospect-studio` and confirm the corrected migration and `neon.ts` are present.
 2. Verify full checks, commit changed code, push as a PR to `mplsjohnnycage/PStudio`, and wait for CI.
 3. On proper Neon CLI authentication, run plan/deploy and end-to-end tests; stop on any unmet production gate.
+
+## 2026-11-12 continuation — repository and authorization
+
+- PR #2 and PR #3 were merged via protected `main`. Ruleset 27077000 now requires five checks including `rivet-integration`; main push `eec2eeb4dcf53d5acfd364d4f8b855122a62381e` passed Verify and Rivet Integration.
+- Direct Neon connector access returned `not an organization member` for target organization `org-noisy-bread-62731739`. Do not use the two different organizations visible under that connector as replacement projects. Correct Neon owner connection/authorization remains required to provision Auth, storage, realtime or deploy migrations.
+- `feat/workspace-auth-read` adds JWT verification, workspace membership and read-only jobs API; detailed contracts/tests in `docs/AUTH-JOBS-API.md`. The additive migration has only been generated and consistency-checked, not applied.

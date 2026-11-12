@@ -4,14 +4,17 @@ import { onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { appRouter } from "@prospect-studio/api/routers/index";
+import { readWorkspaceJobs } from "@prospect-studio/db/job-queries";
 import { initLogger } from "evlog";
 import { createFsDrain } from "evlog/fs";
 import { type EvlogVariables, evlog } from "evlog/hono";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-
+import { createNeonTokenVerifier } from "./auth";
 import { createContext } from "./context";
 import { ENV } from "./env.server";
+import { createJobsRoutes } from "./jobs-api";
+import { db } from "./services";
 
 initLogger({
   env: { service: "prospect-studio-server" },
@@ -28,8 +31,22 @@ app.use(
 app.use(
   "/*",
   cors({
+    allowHeaders: ["Authorization", "Content-Type"],
     allowMethods: ["GET", "POST", "OPTIONS"],
     origin: ENV.CORS_ORIGIN,
+  })
+);
+
+const verify = createNeonTokenVerifier({
+  issuer: process.env.NEON_AUTH_BASE_URL,
+  jwksUrl: process.env.NEON_AUTH_JWKS_URL,
+});
+
+app.route(
+  "/v1",
+  createJobsRoutes({
+    read: (userId, workspaceId) => readWorkspaceJobs(db, userId, workspaceId),
+    verify,
   })
 );
 

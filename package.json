@@ -20,7 +20,7 @@
     "env:generate": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./packages/db/",
     "fix": "ultracite fix",
     "postinstall": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./packages/db/",
-    "test": "node --test packages/api/tests/*.test.mjs packages/db/tests/*.test.mjs && npm run test -w @prospect-studio/worker"
+    "test": "node --import tsx --test packages/api/tests/*.test.mjs packages/db/tests/*.test.mjs apps/server/tests/*.test.mjs && npm run test -w @prospect-studio/worker"
   },
   "overrides": {
     "@next/env": "npm:@varlock/nextjs-integration@1.2.2"
@@ -34,6 +34,7 @@
     "@biomejs/biome": "2.5.15",
     "@prospect-studio/config": "*",
     "@types/node": "^26.4.1",
+    "tsx": "4.23.13",
     "turbo": "^2.11.7",
     "typescript": "^6.0.3",
     "ultracite": "8.0.0",
