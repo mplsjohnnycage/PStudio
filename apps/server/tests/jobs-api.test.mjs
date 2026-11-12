@@ -100,6 +100,7 @@ test("verified Neon-style JWT is the only identity used across the Hono request"
   const token = await new SignJWT({ workspaceId: "workspace-other" })
     .setProtectedHeader({ alg: "EdDSA", kid: "k1" })
     .setIssuer("https://auth.example.test")
+    .setAudience("https://auth.example.test")
     .setSubject("member-user")
     .setIssuedAt()
     .setExpirationTime("3m")

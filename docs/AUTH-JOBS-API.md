@@ -5,7 +5,7 @@
 **Read-only route:** `GET /v1/workspaces/:workspaceId/jobs`
 
 - Requires `Authorization: Bearer <short-lived Neon Managed Better Auth JWT>`.
-- Verifies EdDSA signature using configured Neon JWKS, signed-token issuer, expiration and nonempty `sub`. Rejects an unsigned, malformed, invalid, expired or non-expiring token.
+- Verifies EdDSA signature using configured Neon JWKS, signed-token issuer, **audience equal to the trusted Neon Auth origin**, expiration and nonempty `sub`. Rejects an unsigned, malformed, invalid, expired or non-expiring token.
 - Uses only the verified `sub` as the caller identity. Never trust `x-user-id`, `x-workspace-id` or JWT workspace attributes for access decisions.
 - Checks database membership in `workspace_memberships` (workspace + user composite key), then enforces the same membership again in the jobs query via an inner join to `prospects.workspace_id`. No per-workspace membership or records are returned to callers outside that scope.
 - Results are capped to 100 jobs, newest first; returns selected non-sensitive job summary fields only.

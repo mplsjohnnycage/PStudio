@@ -19,6 +19,7 @@ test("signed Neon-compatible EdDSA JWT succeeds with trusted issuer", async () =
     .setProtectedHeader({ alg: "EdDSA", kid: "test-key" })
     .setSubject("neon-user-1")
     .setIssuer("https://auth.example.test")
+    .setAudience("https://auth.example.test")
     .setIssuedAt()
     .setExpirationTime("5m")
     .sign(pair.privateKey);
@@ -44,6 +45,7 @@ test("JWT verifier denies wrong issuer, invalid signature, expired or non-expiri
       .setProtectedHeader({ alg: "EdDSA", kid: "test-key" })
       .setSubject("u1")
       .setIssuer(issuer)
+      .setAudience("https://auth.example.test")
       .setIssuedAt();
     if (expiration) {
       jwt = jwt.setExpirationTime(expiration);
@@ -90,4 +92,37 @@ test("missing or unsafe auth configuration fails closed", async () => {
       }),
     HTTPS_ERROR
   );
+});
+
+test("Neon JWT verifier rejects signed tokens with wrong or missing audience", async () => {
+  const pair = await generateKeyPair("EdDSA");
+  const jwk = await exportJWK(pair.publicKey);
+  const verify = createNeonTokenVerifier(
+    {
+      issuer: "https://auth.example.test/PS/auth",
+      jwksUrl: "https://auth.example.test/PS/auth/.well-known/jwks.json",
+    },
+    createLocalJWKSet({ keys: [{ ...jwk, alg: "EdDSA", kid: "test-key" }] })
+  );
+  const sign = (audience) => {
+    let token = new SignJWT({})
+      .setProtectedHeader({ alg: "EdDSA", kid: "test-key" })
+      .setSubject("user-1")
+      .setIssuer("https://auth.example.test")
+      .setIssuedAt()
+      .setExpirationTime("5m");
+    if (audience) {
+      token = token.setAudience(audience);
+    }
+    return token.sign(pair.privateKey);
+  };
+  assert.equal(
+    await verify(`Bearer ${await sign("https://auth.example.test")}`),
+    "user-1"
+  );
+  assert.equal(
+    await verify(`Bearer ${await sign("https://different.example.test")}`),
+    null
+  );
+  assert.equal(await verify(`Bearer ${await sign(null)}`), null);
 });
