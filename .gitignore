@@ -61,3 +61,6 @@ coverage
 tmp
 temp
 .neon
+
+# Compiled Neon Functions (do not commit)
+apps/server/dist-neon/
