@@ -80,17 +80,13 @@ function candidateFromAttributes(
   };
 }
 
-/** Historic municipal public-license records; never confirms current licensure. */
-export async function searchMinneapolisLicense(
-  input: string,
-  fetcher: typeof fetch = fetch
+/** Fixed provider endpoint with a bounded, timeout-controlled response. */
+async function queryPublicLicenses(
+  where: string,
+  fetcher: typeof fetch
 ): Promise<SourceCandidate[]> {
-  const query = input.trim();
-  if (!QUERY.test(query)) {
-    throw new Error("Invalid discovery query");
-  }
   const url = new URL(ENDPOINT);
-  url.searchParams.set("where", `dbaName LIKE '%${query}%'`);
+  url.searchParams.set("where", where);
   url.searchParams.set(
     "outFields",
     "licenseNumber,contractorDesc,dbaName,address1,city,state,zip,expirationDate,ESRI_OID"
@@ -149,4 +145,33 @@ export async function searchMinneapolisLicense(
       candidateFromAttributes(feature.attributes, url.toString(), at)
     )
     .filter((candidate): candidate is SourceCandidate => candidate !== null);
+}
+
+/** Historic municipal public-license records; never confirms current licensure. */
+export async function searchMinneapolisLicense(
+  input: string,
+  fetcher: typeof fetch = fetch
+): Promise<SourceCandidate[]> {
+  const query = input.trim();
+  if (!QUERY.test(query)) {
+    throw new Error("Invalid discovery query");
+  }
+  return await queryPublicLicenses(`dbaName LIKE '%${query}%'`, fetcher);
+}
+
+/** Exact identifier lookup prevents stale/misidentified enrichment claims. */
+export async function lookupMinneapolisLicense(
+  externalId: string,
+  fetcher: typeof fetch = fetch
+): Promise<SourceCandidate | null> {
+  if (!LICENSE.test(externalId)) {
+    throw new Error("Invalid license identifier");
+  }
+  const candidates = await queryPublicLicenses(
+    `licenseNumber = '${externalId}'`,
+    fetcher
+  );
+  return (
+    candidates.find((candidate) => candidate.externalId === externalId) ?? null
+  );
 }

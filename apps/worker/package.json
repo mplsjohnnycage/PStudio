@@ -8,6 +8,7 @@
     "check-types": "tsc --noEmit",
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
+    "start:dispatcher": "tsx src/private-dispatcher.ts",
     "test": "vitest run tests/unit --no-file-parallelism --maxWorkers=1",
     "test:integration": "vitest run tests/integration --no-file-parallelism --maxWorkers=1"
   },

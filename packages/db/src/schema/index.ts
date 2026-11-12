@@ -204,6 +204,39 @@ export const jobs = pgTable(
   ]
 );
 
+/** Persisted execution attempts and safe failure codes; no credentials or raw error traces. */
+export const jobAttempts = pgTable(
+  "job_attempts",
+  {
+    attempt: integer("attempt").notNull(),
+    errorCode: text("error_code"),
+    evidenceId: text("evidence_id").references(() => evidence.id, {
+      onDelete: "restrict",
+    }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    jobId: text("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "restrict" }),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    state: text("state").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.jobId, t.attempt], name: "job_attempts_pk" }),
+    index("job_attempts_state_started_idx").on(t.state, t.startedAt),
+    check(
+      "job_attempts_state_ck",
+      sql.raw("state IN ('running','completed','retrying','failed')")
+    ),
+    check("job_attempts_attempt_ck", sql.raw("attempt BETWEEN 1 AND 20")),
+    check(
+      "job_attempts_error_code_ck",
+      sql.raw("error_code IS NULL OR (length(error_code) BETWEEN 1 AND 80)")
+    ),
+  ]
+);
+
 /** Transactional delivery queue; only authenticated server code may enqueue. */
 export const jobOutbox = pgTable(
   "job_outbox",
