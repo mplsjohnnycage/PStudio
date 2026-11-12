@@ -28,6 +28,7 @@ CREATE TABLE "claims" (
 	"prospect_id" text NOT NULL,
 	"unknown_reason" text,
 	"value" text,
+	CONSTRAINT "claims_prospect_id_uniq" UNIQUE("prospect_id","id"),
 	CONSTRAINT "claims_kind_ck" CHECK ("claims"."kind" IN ('observed','reported','inferred','unknown')),
 	CONSTRAINT "claims_unknown_consistency_ck" CHECK (("claims"."kind" = 'unknown' AND "claims"."value" IS NULL AND "claims"."unknown_reason" IS NOT NULL) OR ("claims"."kind" <> 'unknown' AND "claims"."value" IS NOT NULL AND "claims"."unknown_reason" IS NULL))
 );
@@ -54,6 +55,7 @@ CREATE TABLE "evidence" (
 	"source_uri" text NOT NULL,
 	"title" text NOT NULL,
 	"type" text NOT NULL,
+	CONSTRAINT "evidence_prospect_id_uniq" UNIQUE("prospect_id","id"),
 	CONSTRAINT "evidence_sha256_ck" CHECK (length("evidence"."sha256") = 64 AND "evidence"."sha256" ~ '^[a-f0-9]+$')
 );
 --> statement-breakpoint
@@ -96,7 +98,8 @@ CREATE TABLE "previews" (
 	"id" text PRIMARY KEY NOT NULL,
 	"prospect_id" text NOT NULL,
 	"release_id" text NOT NULL,
-	"state" text DEFAULT 'draft' NOT NULL
+	"state" text DEFAULT 'draft' NOT NULL,
+	CONSTRAINT "previews_prospect_preview_release_uniq" UNIQUE("prospect_id","id","release_id")
 );
 --> statement-breakpoint
 CREATE TABLE "prospect_external_ids" (
@@ -119,6 +122,7 @@ CREATE TABLE "prospects" (
 	"website_status" text DEFAULT 'unknown' NOT NULL,
 	"website_url" text,
 	"workspace_id" text NOT NULL,
+	CONSTRAINT "prospects_workspace_id_uniq" UNIQUE("workspace_id","id"),
 	CONSTRAINT "prospects_website_status_ck" CHECK (("prospects"."website_status" = 'unknown' AND "prospects"."website_url" IS NULL) OR ("prospects"."website_status" = 'known' AND "prospects"."website_url" IS NOT NULL)),
 	CONSTRAINT "prospects_phone_status_ck" CHECK (("prospects"."phone_status" = 'unknown' AND "prospects"."phone_value" IS NULL) OR ("prospects"."phone_status" = 'known' AND "prospects"."phone_value" IS NOT NULL))
 );
@@ -130,6 +134,7 @@ CREATE TABLE "releases" (
 	"prospect_id" text NOT NULL,
 	"status" text DEFAULT 'building' NOT NULL,
 	"version" integer NOT NULL,
+	CONSTRAINT "releases_prospect_id_uniq" UNIQUE("prospect_id","id"),
 	CONSTRAINT "release_version_positive_ck" CHECK ("releases"."version" > 0)
 );
 --> statement-breakpoint
@@ -155,17 +160,12 @@ ALTER TABLE "prospect_external_ids" ADD CONSTRAINT "prospect_external_ids_worksp
 ALTER TABLE "prospects" ADD CONSTRAINT "prospects_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "releases" ADD CONSTRAINT "releases_prospect_id_prospects_id_fk" FOREIGN KEY ("prospect_id") REFERENCES "public"."prospects"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "approvals_prospect_subject_idx" ON "approvals" USING btree ("prospect_id","subject_type","subject_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "claims_prospect_id_uniq" ON "claims" USING btree ("prospect_id","id");--> statement-breakpoint
 CREATE INDEX "claims_prospect_field_idx" ON "claims" USING btree ("prospect_id","field");--> statement-breakpoint
 CREATE INDEX "comments_preview_created_idx" ON "comments" USING btree ("preview_id","created_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "evidence_prospect_id_uniq" ON "evidence" USING btree ("prospect_id","id");--> statement-breakpoint
 CREATE INDEX "evidence_prospect_capture_idx" ON "evidence" USING btree ("prospect_id","captured_at");--> statement-breakpoint
 CREATE INDEX "jobs_prospect_state_idx" ON "jobs" USING btree ("prospect_id","state");--> statement-breakpoint
 CREATE INDEX "outreach_drafts_prospect_state_idx" ON "outreach_drafts" USING btree ("prospect_id","state");--> statement-breakpoint
-CREATE UNIQUE INDEX "previews_prospect_preview_release_uniq" ON "previews" USING btree ("prospect_id","id","release_id");--> statement-breakpoint
 CREATE INDEX "previews_prospect_expiry_idx" ON "previews" USING btree ("prospect_id","expires_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "prospect_external_identity_uniq" ON "prospect_external_ids" USING btree ("prospect_id","provider","external_id");--> statement-breakpoint
 CREATE INDEX "prospects_workspace_stage_idx" ON "prospects" USING btree ("workspace_id","stage");--> statement-breakpoint
-CREATE UNIQUE INDEX "prospects_workspace_id_uniq" ON "prospects" USING btree ("workspace_id","id");--> statement-breakpoint
-CREATE UNIQUE INDEX "releases_prospect_version_uniq" ON "releases" USING btree ("prospect_id","version");--> statement-breakpoint
-CREATE UNIQUE INDEX "releases_prospect_id_uniq" ON "releases" USING btree ("prospect_id","id");
+CREATE UNIQUE INDEX "releases_prospect_version_uniq" ON "releases" USING btree ("prospect_id","version");

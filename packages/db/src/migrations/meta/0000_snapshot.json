@@ -1,5 +1,5 @@
 {
-  "id": "41a3e671-c258-4570-9b3a-9cd3a6665f17",
+  "id": "603205fb-d074-4993-b690-165c70cac4d3",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -247,27 +247,6 @@
         }
       },
       "indexes": {
-        "claims_prospect_id_uniq": {
-          "name": "claims_prospect_id_uniq",
-          "columns": [
-            {
-              "expression": "prospect_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "claims_prospect_field_idx": {
           "name": "claims_prospect_field_idx",
           "columns": [
@@ -306,7 +285,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "claims_prospect_id_uniq": {
+          "name": "claims_prospect_id_uniq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "prospect_id",
+            "id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "claims_kind_ck": {
@@ -504,27 +492,6 @@
         }
       },
       "indexes": {
-        "evidence_prospect_id_uniq": {
-          "name": "evidence_prospect_id_uniq",
-          "columns": [
-            {
-              "expression": "prospect_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "evidence_prospect_capture_idx": {
           "name": "evidence_prospect_capture_idx",
           "columns": [
@@ -563,7 +530,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "evidence_prospect_id_uniq": {
+          "name": "evidence_prospect_id_uniq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "prospect_id",
+            "id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "evidence_sha256_ck": {
@@ -906,33 +882,6 @@
         }
       },
       "indexes": {
-        "previews_prospect_preview_release_uniq": {
-          "name": "previews_prospect_preview_release_uniq",
-          "columns": [
-            {
-              "expression": "prospect_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "release_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "previews_prospect_expiry_idx": {
           "name": "previews_prospect_expiry_idx",
           "columns": [
@@ -973,7 +922,17 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "previews_prospect_preview_release_uniq": {
+          "name": "previews_prospect_preview_release_uniq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "prospect_id",
+            "id",
+            "release_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1165,27 +1124,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "prospects_workspace_id_uniq": {
-          "name": "prospects_workspace_id_uniq",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -1204,7 +1142,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "prospects_workspace_id_uniq": {
+          "name": "prospects_workspace_id_uniq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "workspace_id",
+            "id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "prospects_website_status_ck": {
@@ -1282,27 +1229,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "releases_prospect_id_uniq": {
-          "name": "releases_prospect_id_uniq",
-          "columns": [
-            {
-              "expression": "prospect_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -1321,7 +1247,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "releases_prospect_id_uniq": {
+          "name": "releases_prospect_id_uniq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "prospect_id",
+            "id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "release_version_positive_ck": {
