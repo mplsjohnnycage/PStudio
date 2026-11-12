@@ -42,6 +42,7 @@ export function createNeonTokenVerifier(
     try {
       const { payload } = await jwtVerify(token, keys, {
         algorithms: ["EdDSA"],
+        audience: issuer,
         issuer,
       });
       if (
