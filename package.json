@@ -23,13 +23,7 @@
     "test": "node --import tsx --test packages/api/tests/*.test.mjs packages/db/tests/*.test.mjs apps/server/tests/*.test.mjs && npm run test -w @prospect-studio/worker"
   },
   "overrides": {
-    "@better-auth/core": "1.7.21",
-    "@better-auth/drizzle-adapter": "1.7.21",
-    "@better-auth/oauth-provider": "1.7.21",
-    "@better-auth/passkey": "1.7.21",
-    "@next/env": "npm:@varlock/nextjs-integration@1.2.2",
-    "better-auth": "1.7.21",
-    "zod": "$zod"
+    "@next/env": "npm:@varlock/nextjs-integration@1.2.2"
   },
   "dependencies": {
     "@neon/config": "^1.14.0",

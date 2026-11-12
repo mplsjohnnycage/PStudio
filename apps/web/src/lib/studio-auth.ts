@@ -1,9 +1,6 @@
 "use client";
-import { createInternalNeonAuth } from "@neondatabase/auth";
-import {
-  BetterAuthReactAdapter,
-  type BetterAuthReactAdapterInstance,
-} from "@neondatabase/auth/react/adapters";
+import { createInternalNeonAuth } from "@neon/auth";
+import { BetterAuthReactAdapter } from "@neon/auth/react/adapters";
 
 export const authConfigured = Boolean(
   process.env.NEXT_PUBLIC_NEON_AUTH_URL &&
@@ -15,11 +12,7 @@ const neon = authConfigured
     })
   : null;
 
-const client = neon
-  ? (
-      neon.adapter as unknown as BetterAuthReactAdapterInstance
-    ).getBetterAuthInstance()
-  : null;
+const client = neon?.adapter ?? null;
 
 export function getAuthClient() {
   if (!client) {

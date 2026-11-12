@@ -14,11 +14,12 @@ Sprite identity: `prospect-studio-foundation` / `sprite-8d7a3d82-ebce-4d37-8ec5-
 - Test `apps/server/tests/local-pg-flow.test.mjs` uses PGlite with all 4 real migration SQL files; verifies signed EdDSA JWT, scoped membership, prospect evidence, missing-website semantics, idempotent outbox, two versioned private release drafts, outsider denial, and full rollback. This is local PostgreSQL-compatible integration, **not** a deployed Neon/Rivet worker run.
 - Verified local commands before this checkpoint: `npm run check` (pass), `npm run check-types` (pass), `npm test` (52 Node tests passed, 1 live-Neon test skipped, 9 Vitest tests passed = **61 passing, one skipped**), `npm run build` (pass).
 - Staging Neon project `morning-surf-12386530`, database `PS`, branch `validation-20261111` / `br-fancy-shadow-bekwm85g`: additive migrations 0000 through 0003 applied; readback verified `drizzle.__drizzle_migrations = 4` and `release_artifacts` table present. The root `production` branch `br-steep-surf-bek7urvd` has not been migrated by this work.
-- GitHub PR #7 CI `Verify` and `Rivet Integration` passed before merge; no CI success claim is made for this new pilot branch until its own checks run.
+- GitHub PR #7 CI `Verify` and `Rivet Integration` passed before merge. Draft GitHub PR #8 at https://github.com/mplsjohnnycage/PStudio/pull/8 also passed both checks at initial head `33a6aec` (security follow-up remains unpushed as of this checkpoint).
+- **Auth dependency gate addressed in local code**: migrated deprecated `@neondatabase/auth@0.7.0-beta` to supported `@neon/auth@0.8.2`; transitive Better Auth now `1.7.22`, Zod `4.6.7`. Latest independent npm audit: **0 critical, 0 high, 8 moderate, 3 low**. Post-migration lint, typecheck, all 61 active tests and build passed; live sign-in has still not been verified.
 
 ## Hard production blockers (not optional)
 
-1. **Auth security**: latest `npm audit --json` still identifies 20 findings: **1 critical and 3 high**, including pinned vulnerable `better-auth@1.7.6` and `zod@4.5.4` transitive under `@neondatabase/auth@0.7.0-beta`. Local package overrides did not remove these versions. Worker Vitest upgrade to 5.1.0 fixed other critical findings. Do not expose production login until the auth chain is fixed and independently audited.
+1. **Authentication integration**: The high/critical dependency findings have been resolved locally, but the new `@neon/auth` client still requires a live credentialed sign-in, session refresh, JWT audience, CORS/trusted-domain and logout test against the intended managed Auth branch. Review remaining 8 moderate and 3 low findings and ensure the production dependency audit remains clean of high/critical risks.
 2. **Real authentication unverified**: deployed Neon Auth origin, CORS/trusted domains, email signup policies, and end-to-end browser login/token-to-API flow have not been configured/verified. `NEXT_PUBLIC_NEON_AUTH_URL` defaults to an invalid placeholder and all protected actions fail closed.
 3. **Real DB credentials / prod schema**: local `apps/server/.env` points to localhost, not Neon. Transferring a sensitive connection string from Neon connector into Sprite execution was blocked by safety controls; do not bypass it. Use a supported authorized secret-injection workflow. Production migrations were deliberately not applied.
 4. **Worker is not a real enrichment engine**: `apps/worker/src/index.ts` deliberately throws when `NODE_ENV=production` or `RIVET_LOCAL_WORKER_ENABLED != 1`. Rivet jobGate state transitions and outbox transport are built, but an authenticated production worker, dispatcher, actual enrichment adapters, retries, completion reconciliation, and durable output require real integration.
@@ -39,6 +40,6 @@ Sprite identity: `prospect-studio-foundation` / `sprite-8d7a3d82-ebce-4d37-8ec5-
 
 1. Confirm immutable Sprite ID, branch, working tree, remote main SHA and running sessions.
 2. Validate the checkpoint's current test/audit claims against live code; preserve any uncommitted changes.
-3. Create a draft GitHub PR for pilot, run CI and fix any defects. Do not merge if critical/high auth findings remain.
-4. Solve the compatible Neon Auth dependency security problem and set up supported secret injection.
+3. Draft PR #8 exists; publish tested SDK security fix, re-run all CI, then address review and deployment gaps. Do not merge until live runtime acceptance gates pass.
+4. Validate managed Neon Auth live sign-in and use supported secure secret injection (do not pass raw connector credentials into tool arguments).
 5. Implement actual enrichment worker and run isolated staged end-to-end workflow; only after passing ask/perform approved production promotion.

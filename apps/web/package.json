@@ -10,7 +10,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "@neondatabase/auth": "0.7.0-beta",
+    "@neon/auth": "0.8.2",
     "@orpc/client": "^1.15.6",
     "@orpc/server": "^1.15.6",
     "@orpc/tanstack-query": "^1.15.6",
