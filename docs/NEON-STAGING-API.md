@@ -33,3 +33,6 @@ Neon injects DATABASE_URL, NEON_AUTH_BASE_URL and NEON_AUTH_JWKS_URL; never stor
 Real browser sign-in/JWT validation not run (synthetic signup attempt blocked by runtime safety controls); no external enrichment worker run; no production database migration; no public deployment. Vercel returned HTTP 402 for project creation due overdue billing. Do not claim full production readiness.
 
 Staging validation branch expires around 2026-11-18 UTC. Confirm identity/retention before any further deployment.
+## Subsequent checkpoint (2026-11-12)
+
+Read verification/2026-11-12-agent-mcp-staging-gates.md for the later migration, staging function version 4, OAuth/MCP status and production blockers. Newer evidence supersedes older statements.

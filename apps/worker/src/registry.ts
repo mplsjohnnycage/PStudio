@@ -1,6 +1,9 @@
 import { createDb, type Database } from "@prospect-studio/db";
 import { backoffSeconds } from "@prospect-studio/db/outbox";
 import { queue, setup, workflow } from "@rivet-dev/workflows";
+import { credentials } from "./chatgpt-credentials";
+import { chatgptLogin } from "./chatgpt-login";
+import { operatorAgent } from "./operator-agent";
 import { executeEnrichmentAttempt } from "./real-enrichment";
 import { type JobCommand, type JobState, nextJobState } from "./transitions";
 
@@ -107,4 +110,6 @@ export const jobGate = workflow({
   state: { ...initialJobState },
 });
 
-export const registry = setup({ use: { jobGate } });
+export const registry = setup({
+  use: { chatgptLogin, credentials, jobGate, operatorAgent },
+});

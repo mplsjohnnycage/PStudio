@@ -1,5 +1,6 @@
 import { createDb } from "@prospect-studio/db";
 import { admitSourcedProspect } from "@prospect-studio/db/admission-queries";
+import { listWorkspaceAgentEvents } from "@prospect-studio/db/agent-session-queries";
 import { enqueueWorkspaceJob } from "@prospect-studio/db/job-enqueue";
 import { readWorkspaceJobs } from "@prospect-studio/db/job-queries";
 import {
@@ -23,14 +24,18 @@ import {
 } from "@prospect-studio/db/workspace-queries";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { createAgentRoutes } from "./agent-broker";
 import { createNeonTokenVerifier } from "./auth";
 import { createDiscoveryRoutes } from "./discovery-api";
 import { createJobEnqueueRoutes } from "./job-enqueue-api";
 import { createJobsRoutes } from "./jobs-api";
 import { searchMinneapolisLicense } from "./minneapolis-license-source";
+import { mountOperatorApi } from "./operator-api";
+import { createOperatorMcpRoutes } from "./operator-mcp";
 import { createPreviewsRoutes } from "./previews-api";
 import { createProspectsRoutes } from "./prospects-api";
 import { createReviewRoutes } from "./review-api";
+import { createPrivateAgentBroker } from "./rivet-agent-client";
 import { createWorkspacesRoutes } from "./workspaces-api";
 
 export interface NeonFunctionConfiguration {
@@ -38,6 +43,7 @@ export interface NeonFunctionConfiguration {
   corsOrigins?: string[];
   databaseUrl?: string;
   jwksUrl?: string;
+  mcpResource?: string;
 }
 
 /**
@@ -58,6 +64,7 @@ export function createNeonApi(config: NeonFunctionConfiguration) {
   if (!(config.databaseUrl && config.authBaseUrl && config.jwksUrl)) {
     app.get("/health", (c) => c.json({ status: "not_configured" }, 503));
     app.all("/v1/*", (c) => c.json({ error: "temporarily_unavailable" }, 503));
+    app.all("/mcp", (c) => c.json({ error: "mcp_oauth_not_configured" }, 503));
     return app;
   }
 
@@ -158,6 +165,26 @@ export function createNeonApi(config: NeonFunctionConfiguration) {
       verify,
     })
   );
+  app.route(
+    "/v1",
+    createAgentRoutes({
+      authorize: (userId, workspaceId) =>
+        mayDiscoverInWorkspace(db, userId, workspaceId),
+      broker: createPrivateAgentBroker(),
+      events: (userId, workspaceId, after) =>
+        listWorkspaceAgentEvents(db, userId, workspaceId, after),
+      verify,
+    })
+  );
+  mountOperatorApi(app, verify);
+  app.route(
+    "/",
+    createOperatorMcpRoutes({
+      authBaseUrl: config.authBaseUrl,
+      database: db,
+      resource: config.mcpResource,
+    })
+  );
   return app;
 }
 
@@ -171,4 +198,5 @@ export default createNeonApi({
   corsOrigins: runtimeOrigins,
   databaseUrl: process.env.DATABASE_URL,
   jwksUrl: process.env.NEON_AUTH_JWKS_URL,
+  mcpResource: process.env.MCP_RESOURCE,
 });

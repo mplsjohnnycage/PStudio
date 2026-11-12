@@ -13,9 +13,17 @@
     "test:integration": "vitest run tests/integration --no-file-parallelism --maxWorkers=1"
   },
   "dependencies": {
+    "@earendil-works/chord": "^1.5.2",
+    "@earendil-works/pi-ai": "^1.5.2",
+    "@earendil-works/pi-coding-agent": "^1.5.2",
+    "@earendil-works/pi-durable": "^1.5.2",
+    "@earendil-works/pi-schema": "^1.5.2",
+    "@prospect-studio/api": "*",
     "@prospect-studio/db": "*",
+    "@rivet-dev/pi": "^0.5.6",
     "@rivet-dev/workflows": "1.1.1",
-    "rivetkit": "3.1.1"
+    "rivetkit": "3.1.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@prospect-studio/config": "*",

@@ -447,3 +447,60 @@ export const outreachDrafts = pgTable(
     ),
   ]
 );
+
+/**
+ * Binds a Pi conversation to the authenticated user and workspace.
+ * LLM tool input never determines this identity; membership is rechecked.
+ */
+export const agentSessions = pgTable(
+  "agent_sessions",
+  {
+    createdAt: createdAt(),
+    id: text("id").primaryKey(),
+    lastActiveAt: timestamp("last_active_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    userId: text("user_id").notNull(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "restrict" }),
+  },
+  (t) => [
+    index("agent_sessions_workspace_user_idx").on(t.workspaceId, t.userId),
+    check("agent_session_id_ck", sql.raw("length(id) BETWEEN 8 AND 160")),
+  ]
+);
+
+/**
+ * Durable client-side movement events; model transcripts and OAuth secrets
+ * are deliberately excluded. Every read must recheck workspace membership.
+ */
+export const agentUiEvents = pgTable(
+  "agent_ui_events",
+  {
+    createdAt: createdAt(),
+    id: text("id").primaryKey(),
+    prospectId: text("prospect_id"),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => agentSessions.id, { onDelete: "restrict" }),
+    type: text("type").notNull(),
+    view: text("view"),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "restrict" }),
+  },
+  (t) => [
+    index("agent_ui_events_workspace_time_idx").on(t.workspaceId, t.createdAt),
+    check(
+      "agent_ui_events_type_ck",
+      sql.raw("type IN ('navigate','select_prospect')")
+    ),
+    check(
+      "agent_ui_events_shape_ck",
+      sql.raw(
+        "(type = 'navigate' AND view IN ('map','inbox','calendar','studio') AND prospect_id IS NULL) OR (type = 'select_prospect' AND prospect_id IS NOT NULL AND view IS NULL)"
+      )
+    ),
+  ]
+);

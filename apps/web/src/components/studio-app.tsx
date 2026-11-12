@@ -39,6 +39,7 @@ import {
   useState,
 } from "react";
 import { authConfigured, getApiToken, getAuthClient } from "@/lib/studio-auth";
+import { StudioAgent } from "./studio-agent";
 import { StudioMap } from "./studio-map";
 
 interface Workspace {
@@ -699,6 +700,15 @@ export function StudioApp() {
           </button>
         </nav>
         <div className="studio-top-actions">
+          {isOperator && workspaceId ? (
+            <StudioAgent
+              onNavigate={setView}
+              onRefresh={() => refresh(workspaceId)}
+              onSelectProspect={setSelected}
+              request={studioApi}
+              workspaceId={workspaceId}
+            />
+          ) : null}
           <button
             aria-label="Toggle workspace panel"
             className="studio-icon-button prototype-desktop-sidebar-toggle"

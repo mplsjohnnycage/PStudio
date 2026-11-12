@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "@neon/oauth": "^0.3.0",
     "@orpc/openapi": "^1.15.6",
     "@orpc/server": "^1.15.6",
     "@orpc/zod": "^1.15.6",
@@ -23,6 +25,7 @@
     "hono": "^4.13.7",
     "jose": "^6.2.17",
     "pg": "8.23.0",
+    "rivetkit": "^3.1.1",
     "varlock": "1.23.0",
     "zod": "^4.5.4"
   },

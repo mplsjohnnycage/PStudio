@@ -5,6 +5,7 @@ import { RPCHandler } from "@orpc/server/fetch";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { appRouter } from "@prospect-studio/api/routers/index";
 import { admitSourcedProspect } from "@prospect-studio/db/admission-queries";
+import { listWorkspaceAgentEvents } from "@prospect-studio/db/agent-session-queries";
 import { enqueueWorkspaceJob } from "@prospect-studio/db/job-enqueue";
 import { readWorkspaceJobs } from "@prospect-studio/db/job-queries";
 import {
@@ -31,6 +32,7 @@ import { createFsDrain } from "evlog/fs";
 import { type EvlogVariables, evlog } from "evlog/hono";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { createAgentRoutes } from "./agent-broker";
 import { createNeonTokenVerifier } from "./auth";
 import { createContext } from "./context";
 import { createDiscoveryRoutes } from "./discovery-api";
@@ -38,9 +40,11 @@ import { ENV } from "./env.server";
 import { createJobEnqueueRoutes } from "./job-enqueue-api";
 import { createJobsRoutes } from "./jobs-api";
 import { searchMinneapolisLicense } from "./minneapolis-license-source";
+import { mountOperatorApi } from "./operator-api";
 import { createPreviewsRoutes } from "./previews-api";
 import { createProspectsRoutes } from "./prospects-api";
 import { createReviewRoutes } from "./review-api";
+import { createPrivateAgentBroker } from "./rivet-agent-client";
 import { db } from "./services";
 import { createWorkspacesRoutes } from "./workspaces-api";
 
@@ -143,6 +147,19 @@ app.route(
     verify,
   })
 );
+
+app.route(
+  "/v1",
+  createAgentRoutes({
+    authorize: (userId, workspaceId) =>
+      mayDiscoverInWorkspace(db, userId, workspaceId),
+    broker: createPrivateAgentBroker(),
+    events: (userId, workspaceId, after) =>
+      listWorkspaceAgentEvents(db, userId, workspaceId, after),
+    verify,
+  })
+);
+mountOperatorApi(app, verify);
 
 export const apiHandler = new OpenAPIHandler(appRouter, {
   interceptors: [
