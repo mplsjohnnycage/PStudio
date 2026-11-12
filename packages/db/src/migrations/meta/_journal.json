@@ -15,6 +15,13 @@
       "when": 1794444842956,
       "tag": "0001_lush_mister_sinister",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794445955536,
+      "tag": "0002_elite_mauler",
+      "breakpoints": true
     }
   ]
 }
