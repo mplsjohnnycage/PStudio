@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import "../index.css";
-import Header from "@/components/header";
+import "./studio.css";
 import Providers from "@/components/providers";
 
 const geistSans = Geist({
@@ -16,8 +16,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  description: "prospect-studio",
-  title: "prospect-studio",
+  description:
+    "Private workspace for verified prospect intelligence and website concepts",
+  title: "Prospect Studio",
 };
 
 export default function RootLayout({
@@ -30,12 +31,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Providers>
-          <div className="grid h-svh grid-rows-[auto_1fr]">
-            <Header />
-            {children}
-          </div>
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

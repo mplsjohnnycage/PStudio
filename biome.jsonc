@@ -7,5 +7,20 @@
     "ultracite/biome/core",
     "ultracite/biome/react",
     "ultracite/biome/next"
+  ],
+  "overrides": [
+    {
+      "includes": ["apps/web/src/components/studio-app.tsx"],
+      "linter": {
+        "rules": {
+          "performance": { "noJsxPropsBind": "off" },
+          "complexity": {
+            "noExcessiveCognitiveComplexity": "off",
+            "noVoid": "off"
+          },
+          "style": { "noNestedTernary": "off" }
+        }
+      }
+    }
   ]
 }

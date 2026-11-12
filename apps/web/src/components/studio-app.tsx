@@ -1,0 +1,962 @@
+"use client";
+
+import {
+  Activity,
+  ArrowRight,
+  BadgeCheck,
+  Building2,
+  ChevronDown,
+  CircleHelp,
+  Database,
+  ExternalLink,
+  Eye,
+  FilePlus2,
+  Globe2,
+  Layers3,
+  LoaderCircle,
+  LockKeyhole,
+  MapPin,
+  Plus,
+  RefreshCcw,
+  Search,
+  Shield,
+  Sparkles,
+  Workflow,
+  X,
+} from "lucide-react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { authConfigured, getApiToken, getAuthClient } from "@/lib/studio-auth";
+import { StudioMap } from "./studio-map";
+
+interface Workspace {
+  id: string;
+  name: string;
+  role: string;
+}
+interface Prospect {
+  id: string;
+  name: string;
+  physicalAddress: string | null;
+  stage: string;
+  websiteStatus: string;
+  websiteUrl: string | null;
+}
+interface Job {
+  attempt: number;
+  id: string;
+  prospectId: string;
+  state: string;
+  type: string;
+}
+interface Preview {
+  html: string;
+  previewId: string;
+  releaseId: string;
+  version: number;
+}
+
+const serverConfigured = Boolean(process.env.NEXT_PUBLIC_SERVER_URL);
+const apiOrigin = process.env.NEXT_PUBLIC_SERVER_URL?.replace(/\/$/, "") ?? "";
+
+async function studioApi<T>(path: string, options?: RequestInit): Promise<T> {
+  if (!serverConfigured) {
+    throw new Error(
+      "Configure NEXT_PUBLIC_SERVER_URL to connect to the Prospect Studio API."
+    );
+  }
+  const token = await getApiToken();
+  if (!token) {
+    throw new Error(
+      "Your session is missing a valid API token. Sign in again."
+    );
+  }
+  const response = await fetch(`${apiOrigin}/v1${path}`, {
+    ...options,
+    cache: "no-store",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...options?.headers,
+    },
+  });
+  const value = await response.json();
+  if (!response.ok) {
+    const code = (value as { error?: string }).error ?? "request_failed";
+    throw new Error(
+      code === "not_found"
+        ? "Not found, or this workspace is not accessible."
+        : code === "unauthorized"
+          ? "Your session has expired or is not authorized."
+          : code === "temporarily_unavailable"
+            ? "The service is unavailable. Check the server and database connection."
+            : code === "limit_reached"
+              ? "Workspace limit reached."
+              : code === "invalid_input"
+                ? "Review your inputs and try again."
+                : code
+    );
+  }
+  return value as T;
+}
+
+function Login({ onAuthenticated }: { onAuthenticated: () => Promise<void> }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [register, setRegister] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!authConfigured) {
+      setError("Neon Auth is not configured for this deployment.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const result = register
+        ? await getAuthClient().signUp.email({ email, name, password })
+        : await getAuthClient().signIn.email({ email, password });
+      if (result.error) {
+        setError(result.error.message ?? "Authentication was rejected.");
+      } else if (register) {
+        setError(
+          "Account created. Confirm your email if required, then sign in."
+        );
+        setRegister(false);
+      } else {
+        await onAuthenticated();
+      }
+    } catch {
+      setError("Authentication service is unreachable.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <main className="studio-auth-page">
+      <div className="studio-auth-visual">
+        <div className="studio-brand">
+          <div className="studio-brand-mark">
+            P<span>.</span>
+          </div>
+          PROSPECT <b>STUDIO</b>
+        </div>
+        <div className="studio-auth-story">
+          <span className="studio-eyebrow">
+            <span className="studio-live-dot" /> THE PROSPECT WORKSPACE
+          </span>
+          <h1>
+            Find the opportunity.
+            <br />
+            <em>Build the proof.</em>
+          </h1>
+          <p>
+            A private operating system for turning verified business
+            intelligence into compelling website concepts.
+          </p>
+        </div>
+        <div className="studio-auth-foot">
+          <span>DISCOVER</span>
+          <ArrowRight size={14} />
+          <span>ENRICH</span>
+          <ArrowRight size={14} />
+          <span>CREATE</span>
+          <ArrowRight size={14} />
+          <span>REVIEW</span>
+        </div>
+      </div>
+      <div className="studio-auth-form-area">
+        <form className="studio-auth-card" onSubmit={submit}>
+          <div className="studio-auth-icon">
+            <LockKeyhole size={23} />
+          </div>
+          <p className="studio-eyebrow">SECURE WORKSPACE</p>
+          <h2>{register ? "Create your account" : "Welcome back"}</h2>
+          <p className="studio-auth-caption">
+            Sign in with your Neon Auth identity. Workspace permissions are
+            verified for every request.
+          </p>
+          {register ? (
+            <label>
+              Display name
+              <input
+                minLength={2}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your name"
+                required
+                value={name}
+              />
+            </label>
+          ) : null}
+          <label>
+            Email address
+            <input
+              autoComplete="email"
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
+              required
+              type="email"
+              value={email}
+            />
+          </label>
+          <label>
+            Password
+            <input
+              autoComplete={register ? "new-password" : "current-password"}
+              minLength={8}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              type="password"
+              value={password}
+            />
+          </label>
+          {error ? (
+            <p className="studio-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <button
+            className="studio-btn-primary"
+            disabled={busy || !authConfigured}
+            type="submit"
+          >
+            {busy ? <LoaderCircle className="spin" size={17} /> : null}
+            {register ? "Create account" : "Sign in to Studio"}
+            <ArrowRight size={17} />
+          </button>
+          <button
+            className="studio-auth-switch"
+            onClick={() => {
+              setRegister((x) => !x);
+              setError(null);
+            }}
+            type="button"
+          >
+            {register
+              ? "Already have an account? Sign in"
+              : "Need access? Create an account"}
+          </button>
+          <div className="studio-auth-note">
+            <Shield size={15} />{" "}
+            {authConfigured
+              ? "Credentials are handled by Neon Auth."
+              : "Neon authentication must be configured by the operator."}
+          </div>
+        </form>
+      </div>
+    </main>
+  );
+}
+
+export function StudioApp() {
+  const [session, setSession] = useState<{
+    user: { id: string; email?: string };
+  } | null>(null);
+  const [isPending, setIsPending] = useState(true);
+  const reloadSession = useCallback(async () => {
+    const current = await getAuthClient().getSession();
+    setSession(current.data as { user: { id: string; email?: string } } | null);
+  }, []);
+  useEffect(() => {
+    if (!authConfigured) {
+      setIsPending(false);
+      return;
+    }
+    reloadSession()
+      .catch(() => setSession(null))
+      .finally(() => setIsPending(false));
+  }, [reloadSession]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [workspaceId, setWorkspaceId] = useState("");
+  const [prospects, setProspects] = useState<Prospect[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [showWorkspaceCreate, setShowWorkspaceCreate] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newAddress, setNewAddress] = useState("");
+  const [newWebsite, setNewWebsite] = useState("");
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [sidebar, setSidebar] = useState(true);
+
+  const refreshWorkspaces = useCallback(async () => {
+    const result = await studioApi<{ workspaces: Workspace[] }>("/workspaces");
+    setWorkspaces(result.workspaces);
+    setWorkspaceId((prev) =>
+      result.workspaces.some((w) => w.id === prev)
+        ? prev
+        : (result.workspaces.at(0)?.id ?? "")
+    );
+  }, []);
+  const refresh = useCallback(async (ws: string) => {
+    if (!ws) {
+      setProspects([]);
+      setJobs([]);
+      return;
+    }
+    const [a, b] = await Promise.all([
+      studioApi<{ prospects: Prospect[] }>(
+        `/workspaces/${encodeURIComponent(ws)}/prospects`
+      ),
+      studioApi<{ jobs: Job[] }>(`/workspaces/${encodeURIComponent(ws)}/jobs`),
+    ]);
+    setProspects(a.prospects);
+    setJobs(b.jobs);
+  }, []);
+
+  useEffect(() => {
+    if (!session?.user?.id) {
+      setWorkspaces([]);
+      setWorkspaceId("");
+      setProspects([]);
+      setJobs([]);
+      return;
+    }
+    refreshWorkspaces().catch((e) =>
+      setError(e instanceof Error ? e.message : "Failed to load workspaces")
+    );
+  }, [session?.user?.id, refreshWorkspaces]);
+
+  useEffect(() => {
+    if (!workspaceId) {
+      setProspects([]);
+      setJobs([]);
+      return;
+    }
+    refresh(workspaceId).catch((e) =>
+      setError(e instanceof Error ? e.message : "Failed to load prospects")
+    );
+    setSelected(null);
+    setPreview(null);
+  }, [workspaceId, refresh]);
+
+  const current = workspaces.find((w) => w.id === workspaceId);
+  const isOperator = current?.role === "owner" || current?.role === "operator";
+  const chosen = prospects.find((p) => p.id === selected);
+  const filtered = useMemo(
+    () =>
+      prospects.filter((p) =>
+        `${p.name} ${p.physicalAddress ?? ""}`
+          .toLowerCase()
+          .includes(query.toLowerCase())
+      ),
+    [prospects, query]
+  );
+  const statusJobs = chosen
+    ? jobs.filter((j) => j.prospectId === chosen.id)
+    : [];
+  const stageCounts = useMemo(
+    () => ({
+      all: prospects.length,
+      queued: jobs.filter((j) => j.state === "queued").length,
+      unknown: prospects.filter((p) => p.websiteStatus === "unknown").length,
+    }),
+    [prospects, jobs]
+  );
+
+  async function action<T>(
+    name: string,
+    op: () => Promise<T>,
+    done: (res: T) => Promise<void> | void
+  ) {
+    setBusy(name);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await op();
+      await done(result);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unexpected error");
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function createWorkspace(e: FormEvent) {
+    e.preventDefault();
+    await action(
+      "workspace",
+      () =>
+        studioApi<{ workspaceId: string }>("/workspaces", {
+          body: JSON.stringify({ name: workspaceName }),
+          method: "POST",
+        }),
+      async ({ workspaceId: newId }) => {
+        setWorkspaceName("");
+        setShowWorkspaceCreate(false);
+        await refreshWorkspaces();
+        setWorkspaceId(newId);
+        setNotice("New workspace created. You are the owner.");
+      }
+    );
+  }
+  async function createProspect(e: FormEvent) {
+    e.preventDefault();
+    if (!workspaceId) {
+      return;
+    }
+    const payload = {
+      name: newName.trim(),
+      ...(newAddress.trim() ? { physicalAddress: newAddress.trim() } : {}),
+      ...(newWebsite.trim() ? { websiteUrl: newWebsite.trim() } : {}),
+    };
+    await action(
+      "prospect",
+      () =>
+        studioApi<{ prospectId: string }>(
+          `/workspaces/${workspaceId}/prospects`,
+          { body: JSON.stringify(payload), method: "POST" }
+        ),
+      async ({ prospectId }) => {
+        setShowCreate(false);
+        setNewName("");
+        setNewAddress("");
+        setNewWebsite("");
+        await refresh(workspaceId);
+        setSelected(prospectId);
+        setNotice("Prospect saved with operator-reported source evidence.");
+      }
+    );
+  }
+  async function enqueue(prospectId: string) {
+    await action(
+      "enqueue",
+      () =>
+        studioApi<{ jobId: string }>(
+          `/workspaces/${workspaceId}/prospects/${prospectId}/jobs`,
+          {
+            body: JSON.stringify({ type: "enrich" }),
+            headers: { "Idempotency-Key": `ui-${crypto.randomUUID()}` },
+            method: "POST",
+          }
+        ),
+      async () => {
+        await refresh(workspaceId);
+        setNotice(
+          "Enrichment command queued. Processing depends on the separate worker runtime."
+        );
+      }
+    );
+  }
+  async function createPreview(prospectId: string) {
+    await action(
+      "preview",
+      () =>
+        studioApi<{ previewId: string }>(
+          `/workspaces/${workspaceId}/prospects/${prospectId}/previews`,
+          { body: "{}", method: "POST" }
+        ),
+      async (res) => {
+        const details = await studioApi<Preview>(
+          `/workspaces/${workspaceId}/previews/${res.previewId}`
+        );
+        setPreview(details);
+        setNotice(
+          `Private draft v${details.version} generated. No publication or outreach occurred.`
+        );
+      }
+    );
+  }
+
+  if (isPending) {
+    return (
+      <main className="studio-loading">
+        <LoaderCircle className="spin" size={32} />
+        <span>Checking secure session…</span>
+      </main>
+    );
+  }
+  if (!session?.user) {
+    return <Login onAuthenticated={reloadSession} />;
+  }
+  return (
+    <main className="studio-shell">
+      <header className="studio-topbar">
+        <div className="studio-brand">
+          <span className="studio-brand-mark">
+            P<span>.</span>
+          </span>
+          <span>
+            PROSPECT <b>STUDIO</b>
+          </span>
+        </div>
+        <div className="studio-top-center">
+          <span className="studio-environment">
+            <span className="studio-live-dot" /> PRIVATE WORKSPACE
+          </span>
+          <span className="studio-top-divider" />
+          <span className="studio-top-breadcrumb">Prospect intelligence</span>
+        </div>
+        <div className="studio-top-actions">
+          <button
+            aria-label="Toggle workspace panel"
+            className="studio-icon-button"
+            onClick={() => setSidebar((x) => !x)}
+            type="button"
+          >
+            <Layers3 size={18} />
+          </button>
+          <div className="studio-avatar">
+            {session.user.email?.slice(0, 1).toUpperCase() ?? "U"}
+          </div>
+          <button
+            className="studio-signout"
+            onClick={() =>
+              void getAuthClient()
+                .signOut()
+                .then(() => setSession(null))
+            }
+            type="button"
+          >
+            Sign out
+          </button>
+        </div>
+      </header>
+      <div className="studio-workspace-row">
+        <div className="studio-workspace-select">
+          <Building2 size={16} />
+          <select
+            aria-label="Active workspace"
+            onChange={(e) => setWorkspaceId(e.target.value)}
+            value={workspaceId}
+          >
+            <option value="">Select a workspace</option>
+            {workspaces.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name} · {w.role}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={14} />
+        </div>
+        <button
+          className="studio-text-button"
+          onClick={() => setShowWorkspaceCreate(true)}
+          type="button"
+        >
+          <Plus size={14} /> New workspace
+        </button>
+        <span className="studio-workspace-cap">
+          <Shield size={14} /> Workspace-scoped access
+        </span>
+      </div>
+      {error ? (
+        <div className="studio-banner studio-banner-error" role="alert">
+          <CircleHelp size={17} />
+          <span>{error}</span>
+          <button
+            aria-label="Dismiss error"
+            onClick={() => setError(null)}
+            type="button"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      ) : null}
+      {notice ? (
+        <div className="studio-banner studio-banner-info" role="status">
+          <BadgeCheck size={17} />
+          <span>{notice}</span>
+          <button
+            aria-label="Dismiss message"
+            onClick={() => setNotice(null)}
+            type="button"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      ) : null}
+      <div className="studio-main-grid">
+        {sidebar ? (
+          <aside className="studio-sidebar">
+            <div className="studio-sidebar-heading">
+              <span className="studio-eyebrow">PIPELINE / WORKSPACE</span>
+              <h1>Prospect intelligence</h1>
+              <p>
+                Evidence first. Every website concept starts with sourced
+                business facts.
+              </p>
+            </div>
+            <div className="studio-stats">
+              <div>
+                <strong>{stageCounts.all}</strong>
+                <span>PROSPECTS</span>
+              </div>
+              <div>
+                <strong>{stageCounts.unknown}</strong>
+                <span>UNKNOWN WEB</span>
+              </div>
+              <div>
+                <strong>{stageCounts.queued}</strong>
+                <span>QUEUED</span>
+              </div>
+            </div>
+            <div className="studio-list-heading">
+              <h2>Prospects</h2>
+              <button
+                aria-label="Refresh prospects"
+                className="studio-icon-button"
+                onClick={() => workspaceId && void refresh(workspaceId)}
+                type="button"
+              >
+                <RefreshCcw size={15} />
+              </button>
+            </div>
+            <label className="studio-search">
+              <Search size={17} />
+              <input
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search businesses…"
+                value={query}
+              />
+            </label>
+            <div className="studio-list-items">
+              {workspaceId ? (
+                filtered.length === 0 ? (
+                  <div className="studio-empty-list">
+                    <Building2 size={26} />
+                    <p>
+                      No matching prospects. Import a business to start the
+                      pipeline.
+                    </p>
+                  </div>
+                ) : (
+                  filtered.map((p) => (
+                    <button
+                      className={`studio-prospect-row ${p.id === selected ? "selected" : ""}`}
+                      key={p.id}
+                      onClick={() => {
+                        setSelected(p.id);
+                        setPreview(null);
+                      }}
+                      type="button"
+                    >
+                      <span className="studio-prospect-icon">
+                        {p.name.slice(0, 1).toUpperCase()}
+                      </span>
+                      <span>
+                        <strong>{p.name}</strong>
+                        <small>
+                          {p.physicalAddress ?? "Address not reported"}
+                        </small>
+                        <em>
+                          {p.websiteStatus === "unknown"
+                            ? "Website unknown"
+                            : "Reported website"}
+                        </em>
+                      </span>
+                      <ArrowRight size={14} />
+                    </button>
+                  ))
+                )
+              ) : (
+                <div className="studio-empty-list">
+                  <Database size={26} />
+                  <p>Create or select a workspace to begin.</p>
+                </div>
+              )}
+            </div>
+            <div className="studio-sidebar-footer">
+              <button
+                className="studio-btn-primary"
+                disabled={!isOperator}
+                onClick={() => setShowCreate(true)}
+                type="button"
+              >
+                <Plus size={17} /> Add prospect
+              </button>
+              <p>Discovery automation is not enabled.</p>
+            </div>
+          </aside>
+        ) : null}
+        <section className="studio-map-panel">
+          <StudioMap />
+          <div className="studio-map-top">
+            <span>
+              <MapPin size={15} /> Minneapolis–Saint Paul
+            </span>
+            <span>BASE MAP / OSM</span>
+          </div>
+          <div className="studio-map-legend">
+            <MapPin size={15} />
+            <span>
+              Map pins require verified coordinates; none are inferred from
+              addresses.
+            </span>
+          </div>
+        </section>
+        <aside className="studio-inspector">
+          {chosen ? (
+            <>
+              <div className="studio-inspector-head">
+                <span className="studio-eyebrow">PROSPECT / INSPECTOR</span>
+                <span className="studio-inspector-status">REPORTED</span>
+              </div>
+              <h2>{chosen.name}</h2>
+              <p className="studio-inspector-address">
+                <MapPin size={16} />
+                {chosen.physicalAddress ?? "Location not reported"}
+              </p>
+              <div className="studio-info-block">
+                <span>ONLINE PRESENCE</span>
+                <strong>
+                  {chosen.websiteStatus === "unknown"
+                    ? "Not established"
+                    : "Reported website"}
+                </strong>
+                {chosen.websiteUrl ? (
+                  <a href={chosen.websiteUrl} rel="noreferrer" target="_blank">
+                    {chosen.websiteUrl}
+                    <ExternalLink size={13} />
+                  </a>
+                ) : (
+                  <p>
+                    Absence of a reported website does not prove a business has
+                    no website.
+                  </p>
+                )}
+              </div>
+              <div className="studio-info-block">
+                <span>SOURCE CONFIDENCE</span>
+                <div className="studio-source">
+                  <Shield size={18} />
+                  <div>
+                    <strong>Operator-reported</strong>
+                    <p>
+                      Not externally verified. Inspect source evidence before
+                      publishing claims.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="studio-pipeline-block">
+                <span className="studio-eyebrow">WORKFLOW ACTIONS</span>
+                <div className="studio-step">
+                  <span className="studio-step-icon done">
+                    <BadgeCheck size={16} />
+                  </span>
+                  <div>
+                    <strong>01 / Discovered</strong>
+                    <p>Durable prospect record</p>
+                  </div>
+                </div>
+                <div className="studio-step">
+                  <span className="studio-step-icon">
+                    <Activity size={17} />
+                  </span>
+                  <div>
+                    <strong>02 / Enrichment</strong>
+                    <p>{statusJobs.at(0)?.state ?? "Not requested"}</p>
+                  </div>
+                </div>
+                <div className="studio-step">
+                  <span className="studio-step-icon">
+                    <Globe2 size={17} />
+                  </span>
+                  <div>
+                    <strong>03 / Website concept</strong>
+                    <p>Private, versioned draft</p>
+                  </div>
+                </div>
+                <div className="studio-step">
+                  <span className="studio-step-icon">
+                    <Eye size={17} />
+                  </span>
+                  <div>
+                    <strong>04 / Review</strong>
+                    <p>No external publication or outreach</p>
+                  </div>
+                </div>
+              </div>
+              <button
+                className="studio-btn-secondary"
+                disabled={!isOperator || busy !== null}
+                onClick={() => void enqueue(chosen.id)}
+                type="button"
+              >
+                {busy === "enqueue" ? (
+                  <LoaderCircle className="spin" size={17} />
+                ) : (
+                  <Workflow size={17} />
+                )}{" "}
+                Queue enrichment
+              </button>
+              <button
+                className="studio-btn-primary"
+                disabled={!isOperator || busy !== null}
+                onClick={() => void createPreview(chosen.id)}
+                type="button"
+              >
+                {busy === "preview" ? (
+                  <LoaderCircle className="spin" size={17} />
+                ) : (
+                  <Sparkles size={17} />
+                )}{" "}
+                Generate private concept
+              </button>
+              {preview ? (
+                <div className="studio-preview-result">
+                  <div>
+                    <b>Private preview · v{preview.version}</b>
+                    <span>NOT PUBLISHED</span>
+                  </div>
+                  <iframe
+                    loading="lazy"
+                    sandbox=""
+                    srcDoc={preview.html}
+                    title={`Private draft for ${chosen.name}`}
+                  />
+                </div>
+              ) : null}
+              <div className="studio-inspector-foot">
+                <LockKeyhole size={15} /> No automatic sending or publishing
+              </div>
+            </>
+          ) : (
+            <div className="studio-no-selection">
+              <div className="studio-no-selection-symbol">
+                <Layers3 size={32} />
+              </div>
+              <span className="studio-eyebrow">INSPECTOR</span>
+              <h2>
+                From signal
+                <br />
+                to website.
+              </h2>
+              <p>
+                Select a prospect to inspect its provenance, queue enrichment,
+                or generate a draft concept.
+              </p>
+              <div className="studio-no-selection-flow">
+                <span>01 / DISCOVER</span>
+                <span>02 / ENRICH</span>
+                <span>03 / BUILD</span>
+                <span>04 / REVIEW</span>
+              </div>
+            </div>
+          )}
+        </aside>
+      </div>
+      <footer className="studio-bottom">
+        <span>
+          <span className="studio-live-dot" /> STUDIO FOUNDATION
+        </span>
+        <span>
+          Private operator surface · Authenticated actions · No autonomous
+          outreach
+        </span>
+        <span>PROSPECT STUDIO / 2026</span>
+      </footer>
+      {showWorkspaceCreate ? (
+        <div className="studio-modal-backdrop" role="presentation">
+          <form className="studio-modal" onSubmit={createWorkspace}>
+            <button
+              aria-label="Close"
+              className="studio-modal-close"
+              onClick={() => setShowWorkspaceCreate(false)}
+              type="button"
+            >
+              <X size={19} />
+            </button>
+            <span className="studio-eyebrow">WORKSPACE SETUP</span>
+            <h2>Create workspace</h2>
+            <p>
+              A new private workspace grants its creator the owner role. Other
+              workspaces are never accessible without membership.
+            </p>
+            <label>
+              Name
+              <input
+                maxLength={160}
+                minLength={2}
+                onChange={(e) => setWorkspaceName(e.target.value)}
+                placeholder="Your company or team"
+                required
+                value={workspaceName}
+              />
+            </label>
+            <button
+              className="studio-btn-primary"
+              disabled={busy !== null}
+              type="submit"
+            >
+              <Building2 size={17} /> Create workspace
+            </button>
+          </form>
+        </div>
+      ) : null}
+      {showCreate ? (
+        <div className="studio-modal-backdrop" role="presentation">
+          <form className="studio-modal" onSubmit={createProspect}>
+            <button
+              aria-label="Close"
+              className="studio-modal-close"
+              onClick={() => setShowCreate(false)}
+              type="button"
+            >
+              <X size={19} />
+            </button>
+            <span className="studio-eyebrow">NEW PROSPECT / MANUAL REPORT</span>
+            <h2>Add business</h2>
+            <p>
+              Submit only facts you have a basis to report. Every record gets
+              source-attributed evidence; no website is assumed when unknown.
+            </p>
+            <label>
+              Business name
+              <input
+                maxLength={160}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Business name"
+                required
+                value={newName}
+              />
+            </label>
+            <label>
+              Physical address (optional)
+              <input
+                maxLength={300}
+                onChange={(e) => setNewAddress(e.target.value)}
+                placeholder="Street, city, region"
+                value={newAddress}
+              />
+            </label>
+            <label>
+              Known website URL (optional)
+              <input
+                onChange={(e) => setNewWebsite(e.target.value)}
+                placeholder="https://example.com"
+                value={newWebsite}
+              />
+            </label>
+            <button
+              className="studio-btn-primary"
+              disabled={busy !== null}
+              type="submit"
+            >
+              {busy === "prospect" ? (
+                <LoaderCircle className="spin" size={17} />
+              ) : (
+                <FilePlus2 size={17} />
+              )}{" "}
+              Save reported prospect
+            </button>
+          </form>
+        </div>
+      ) : null}
+    </main>
+  );
+}

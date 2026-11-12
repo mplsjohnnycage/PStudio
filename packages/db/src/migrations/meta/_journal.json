@@ -22,6 +22,13 @@
       "when": 1794445955536,
       "tag": "0002_elite_mauler",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794454428479,
+      "tag": "0003_lazy_morg",
+      "breakpoints": true
     }
   ]
 }

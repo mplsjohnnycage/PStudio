@@ -10,6 +10,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@neondatabase/auth": "0.7.0-beta",
     "@orpc/client": "^1.15.6",
     "@orpc/server": "^1.15.6",
     "@orpc/tanstack-query": "^1.15.6",
@@ -21,6 +22,7 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "evlog": "^2.33.1",
     "lucide-react": "^1.41.0",
+    "maplibre-gl": "6.18.0",
     "next": "^16.3.4",
     "next-themes": "^0.4.6",
     "react": "^19.2.8",

@@ -6,6 +6,18 @@ import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { appRouter } from "@prospect-studio/api/routers/index";
 import { enqueueWorkspaceJob } from "@prospect-studio/db/job-enqueue";
 import { readWorkspaceJobs } from "@prospect-studio/db/job-queries";
+import {
+  createWorkspacePreview,
+  readPrivatePreview,
+} from "@prospect-studio/db/preview-queries";
+import {
+  createWorkspaceProspect,
+  listWorkspaceProspects,
+} from "@prospect-studio/db/prospect-queries";
+import {
+  createOwnedWorkspace,
+  listUserWorkspaces,
+} from "@prospect-studio/db/workspace-queries";
 import { initLogger } from "evlog";
 import { createFsDrain } from "evlog/fs";
 import { type EvlogVariables, evlog } from "evlog/hono";
@@ -16,7 +28,10 @@ import { createContext } from "./context";
 import { ENV } from "./env.server";
 import { createJobEnqueueRoutes } from "./job-enqueue-api";
 import { createJobsRoutes } from "./jobs-api";
+import { createPreviewsRoutes } from "./previews-api";
+import { createProspectsRoutes } from "./prospects-api";
 import { db } from "./services";
+import { createWorkspacesRoutes } from "./workspaces-api";
 
 initLogger({
   env: { service: "prospect-studio-server" },
@@ -57,6 +72,37 @@ app.route(
   createJobEnqueueRoutes({
     enqueue: (userId, workspaceId, prospectId, key) =>
       enqueueWorkspaceJob(db, userId, workspaceId, prospectId, key),
+    verify,
+  })
+);
+
+app.route(
+  "/v1",
+  createProspectsRoutes({
+    create: (userId, workspaceId, input) =>
+      createWorkspaceProspect(db, userId, workspaceId, input),
+    list: (userId, workspaceId) =>
+      listWorkspaceProspects(db, userId, workspaceId),
+    verify,
+  })
+);
+
+app.route(
+  "/v1",
+  createPreviewsRoutes({
+    create: (userId, workspaceId, prospectId) =>
+      createWorkspacePreview(db, userId, workspaceId, prospectId),
+    read: (userId, workspaceId, previewId) =>
+      readPrivatePreview(db, userId, workspaceId, previewId),
+    verify,
+  })
+);
+
+app.route(
+  "/v1",
+  createWorkspacesRoutes({
+    create: (userId, name) => createOwnedWorkspace(db, userId, name),
+    list: (userId) => listUserWorkspaces(db, userId),
     verify,
   })
 );

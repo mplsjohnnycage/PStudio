@@ -270,6 +270,30 @@ export const releases = pgTable(
   ]
 );
 
+/** Immutable private HTML snapshots; object storage may replace the bytes later. */
+export const releaseArtifacts = pgTable(
+  "release_artifacts",
+  {
+    createdAt: createdAt(),
+    html: text("html").notNull(),
+    prospectId: text("prospect_id").notNull(),
+    releaseId: text("release_id")
+      .primaryKey()
+      .references(() => releases.id, { onDelete: "restrict" }),
+    sha256: text("sha256").notNull(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.prospectId, t.releaseId],
+      foreignColumns: [releases.prospectId, releases.id],
+    }).onDelete("restrict"),
+    check(
+      "release_artifacts_sha256_ck",
+      sql`length(${t.sha256}) = 64 AND ${t.sha256} ~ '^[a-f0-9]+$'`
+    ),
+  ]
+);
+
 export const previews = pgTable(
   "previews",
   {
