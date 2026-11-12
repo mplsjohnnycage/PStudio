@@ -3,6 +3,7 @@ import { and, desc, eq, gt, or } from "drizzle-orm";
 import type { Database } from "./index";
 import { renderProspectPreview } from "./preview-render";
 import {
+  evidence,
   previews,
   previewViewers,
   prospects,
@@ -58,7 +59,31 @@ export function createWorkspacePreview(
     const version = (prior.at(0)?.version ?? 0) + 1;
     const releaseId = `release_${randomUUID()}`;
     const previewId = `preview_${randomUUID()}`;
+    const [origin] = await tx
+      .select({
+        capturedAt: evidence.capturedAt,
+        evidenceId: evidence.id,
+        kind: evidence.type,
+        sourceUri: evidence.sourceUri,
+        title: evidence.title,
+      })
+      .from(evidence)
+      .where(eq(evidence.prospectId, prospectId))
+      .orderBy(desc(evidence.capturedAt))
+      .limit(1);
     const html = renderProspectPreview({
+      ...(origin &&
+      (origin.kind === "external_source" || origin.kind === "operator_report")
+        ? {
+            provenance: {
+              capturedAt: origin.capturedAt,
+              evidenceId: origin.evidenceId,
+              kind: origin.kind,
+              sourceUri: origin.sourceUri,
+              title: origin.title,
+            },
+          }
+        : {}),
       name: record.name,
       physicalAddress: record.physicalAddress,
       websiteUrl: record.websiteUrl,

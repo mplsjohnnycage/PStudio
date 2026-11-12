@@ -1,6 +1,15 @@
+export interface PreviewProvenance {
+  capturedAt: Date;
+  evidenceId: string;
+  kind: "external_source" | "operator_report";
+  sourceUri: string;
+  title: string;
+}
+
 export interface PreviewInput {
   name: string;
   physicalAddress: string | null;
+  provenance?: PreviewProvenance;
   websiteUrl: string | null;
 }
 
@@ -51,6 +60,45 @@ export function renderProspectPreview(input: PreviewInput): string {
     ? `<p class="address">${address}</p>`
     : '<p class="muted">Location has not been provided.</p>';
 
+  const source = input.provenance;
+  const external = source?.kind === "external_source";
+  const historical = external && /(?:historical|legacy)/i.test(source.title);
+  const narrative = historical
+    ? "A private concept based on a historical public record. This business information and any licensing or operating status are not verified as current."
+    : external
+      ? "A private concept based on an external source report. Business details have not been independently verified and require approval before publication."
+      : "A private visual concept based only on information supplied by an operator. Business details and messaging require verification before publication.";
+  const sourceUrl =
+    external && source.sourceUri.startsWith("https://")
+      ? safeWebsite(source.sourceUri)
+      : null;
+  const capturedAt =
+    source?.capturedAt instanceof Date &&
+    !Number.isNaN(source.capturedAt.getTime())
+      ? escapeHtml(source.capturedAt.toISOString())
+      : "unknown";
+  const attribution =
+    external && sourceUrl
+      ? '<div class="provenance"><h2>Source of reported information</h2><p>' +
+        (historical
+          ? "Historical registry report; not evidence of current licensing."
+          : "External source report; not independently verified.") +
+        '</p><p><a href="' +
+        sourceUrl +
+        '" target="_blank" rel="noopener noreferrer">' +
+        escapeHtml(source.title) +
+        "</a></p><p>Retrieved " +
+        capturedAt +
+        " · Evidence " +
+        escapeHtml(source.evidenceId) +
+        "</p></div>"
+      : "";
+  const provenanceLabel = historical
+    ? "Historical registry report · Not independently verified"
+    : external
+      ? "External source report · Not independently verified"
+      : "Operator-reported information";
+
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -70,6 +118,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:27p
 .card strong{font-size:90px;font-weight:500;line-height:1}.card p{font-size:13px;text-transform:uppercase;letter-spacing:.12em}
 .details{padding:38px clamp(20px,6vw,90px) 70px;border-top:1px solid #30453b;max-width:1240px;margin:auto;display:grid;grid-template-columns:1fr 1fr;gap:40px}
 .details h2{font-size:24px;letter-spacing:-.03em}.muted{color:#95a59c}.address{font-size:20px}.action{display:inline-block;margin-top:5px;border:1px solid #c3d3aa;padding:14px 18px;border-radius:9px;color:#d7efbc;text-decoration:none}
+.provenance{max-width:1240px;margin:auto;padding:28px clamp(20px,6vw,90px);border-top:1px solid #30453b;color:#b7c7bb;font-size:13px}.provenance h2{font-size:19px;color:#eef2e7}.provenance a{color:#d7efbc}
 footer{font-size:11px;letter-spacing:.02em;color:#81978a;padding:26px clamp(20px,6vw,90px);border-top:1px solid #30453b}
 @media(max-width:720px){.hero{grid-template-columns:1fr;padding-top:50px;padding-bottom:50px}.card{min-height:240px}.details{grid-template-columns:1fr;gap:10px}.flag{font-size:9px}}
 </style>
@@ -77,11 +126,12 @@ footer{font-size:11px;letter-spacing:.02em;color:#81978a;padding:26px clamp(20px
 <body>
 <header><div class="brand"><span class="mark">${mark}</span><span>${name}</span></div><span class="flag">Draft preview</span></header>
 <main>
-<section class="hero"><div><p class="kicker">A considered digital presence</p><h1>${name}</h1><p class="sub">A private visual concept based only on information supplied by an operator. Business details and messaging require verification before publication.</p></div>
+<section class="hero"><div><p class="kicker">A considered digital presence</p><h1>${name}</h1><p class="sub">${narrative}</p></div>
 <div class="card"><strong>${mark}</strong><p>Concept / Unpublished</p></div></section>
 <section class="details"><div><h2>Location</h2>${where}</div><div><h2>Online presence</h2>${visit}</div></section>
+${attribution}
 </main>
-<footer>Operator-reported information · Private Draft preview · Not approved for publication or outreach.</footer>
+<footer>${provenanceLabel} · Private Draft preview · Not approved for publication or outreach.</footer>
 </body>
 </html>`;
 }
