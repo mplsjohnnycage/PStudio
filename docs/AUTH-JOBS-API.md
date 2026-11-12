@@ -11,7 +11,15 @@
 - Results are capped to 100 jobs, newest first; returns selected non-sensitive job summary fields only.
 - `401` for missing/invalid authentication, `400` for malformed workspace ID, `404` when no matching workspace membership, and `503` for DB errors without leaking SQL details.
 
-**No write endpoints, approval mutation, job command dispatch, marketing outreach or Rivet direct actor access are implemented by this change.** No first-login or self-enrollment route is provided.
+**This original read-only change now coexists with the new locally implemented write route.** Approval mutation, customer outreach and direct Rivet actor access are still absent. No first-login/self-enrollment route exists.
+
+## Authenticated enqueue (implemented locally; not deployed)
+
+`POST /v1/workspaces/:workspaceId/prospects/:prospectId/jobs` requires a short-lived signed Neon Managed Better Auth JWT (valid EdDSA signature, issuer, audience, expiry and subject); `Idempotency-Key` is mandatory (8–64 ASCII alphanumeric, underscore or hyphen characters). Accepts only `{"type":"enrich"}` and returns `202 {"jobId":"...","state":"queued"}`, `401` for unauthorized, `404` for missing resource or non-operator workspace membership, `409` for an idempotency conflict, or `503` when persistence is unavailable.
+
+The server never trusts client-supplied user identity. Within one DB transaction it locks the `owner`/`operator` workspace membership and matching prospect, inserts deterministic SHA-256-derived job and outbox IDs, verifies replayed job/command content, and aborts the entire transaction on semantic conflict. Jobs are enrichment-only; no outreach, approval, sending, external crawl or paid inference is triggered by the API. Outbox delivery is a separate disabled-by-default worker action. There is no publicly exposed Rivet control plane.
+
+Verification at this PR: 3 Hono enqueue HTTP tests; 5 DB transaction tests (including a RED→GREEN outbox rollback regression); full 48-test suite, lint, TypeScript, build and Drizzle migration check passed on the developer Sprite. CI also verifies a separate Rivet integration workflow. This is *not* a successful production enqueue test: production browser login, Neon JWT, migrated schema, live membership, worker dispatch, restarts, release and outreach approvals still require isolated integration verification.
 
 ## Required server configuration
 
