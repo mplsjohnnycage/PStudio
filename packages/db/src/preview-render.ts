@@ -1,3 +1,5 @@
+const HISTORICAL_SOURCE_TITLE = /(?:historical|legacy)/i;
+
 export interface PreviewProvenance {
   capturedAt: Date;
   evidenceId: string;
@@ -62,12 +64,17 @@ export function renderProspectPreview(input: PreviewInput): string {
 
   const source = input.provenance;
   const external = source?.kind === "external_source";
-  const historical = external && /(?:historical|legacy)/i.test(source.title);
-  const narrative = historical
-    ? "A private concept based on a historical public record. This business information and any licensing or operating status are not verified as current."
-    : external
-      ? "A private concept based on an external source report. Business details have not been independently verified and require approval before publication."
-      : "A private visual concept based only on information supplied by an operator. Business details and messaging require verification before publication.";
+  const historical = external && HISTORICAL_SOURCE_TITLE.test(source.title);
+  let narrative =
+    "A private visual concept based only on information supplied by an operator. Business details and messaging require verification before publication.";
+  if (external) {
+    narrative =
+      "A private concept based on an external source report. Business details have not been independently verified and require approval before publication.";
+  }
+  if (historical) {
+    narrative =
+      "A private concept based on a historical public record. This business information and any licensing or operating status are not verified as current.";
+  }
   const sourceUrl =
     external && source.sourceUri.startsWith("https://")
       ? safeWebsite(source.sourceUri)
@@ -93,11 +100,13 @@ export function renderProspectPreview(input: PreviewInput): string {
         escapeHtml(source.evidenceId) +
         "</p></div>"
       : "";
-  const provenanceLabel = historical
-    ? "Historical registry report · Not independently verified"
-    : external
-      ? "External source report · Not independently verified"
-      : "Operator-reported information";
+  let provenanceLabel = "Operator-reported information";
+  if (external) {
+    provenanceLabel = "External source report · Not independently verified";
+  }
+  if (historical) {
+    provenanceLabel = "Historical registry report · Not independently verified";
+  }
 
   return `<!doctype html>
 <html lang="en">
