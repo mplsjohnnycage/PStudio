@@ -4,6 +4,7 @@ import {
   foreignKey,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -199,6 +200,53 @@ export const jobs = pgTable(
     check(
       "jobs_attempts_ck",
       sql`${t.attempt} >= 0 AND ${t.maxAttempts} BETWEEN 1 AND 20 AND ${t.attempt} <= ${t.maxAttempts}`
+    ),
+  ]
+);
+
+/** Transactional delivery queue; only authenticated server code may enqueue. */
+export const jobOutbox = pgTable(
+  "job_outbox",
+  {
+    claimedUntil: timestamp("claimed_until", { withTimezone: true }),
+    claimToken: text("claim_token"),
+    command: jsonb("command").notNull(),
+    createdAt: createdAt(),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    deliveryAttempts: integer("delivery_attempts").notNull().default(0),
+    id: text("id").primaryKey(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    jobId: text("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "restrict" }),
+    maxDeliveries: integer("max_deliveries").notNull().default(10),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    state: text("state").notNull().default("pending"),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    unique("job_outbox_job_key_uniq").on(t.jobId, t.idempotencyKey),
+    index("job_outbox_due_idx").on(t.state, t.nextAttemptAt, t.createdAt),
+    check(
+      "job_outbox_state_ck",
+      sql`${t.state} IN ('pending', 'claimed', 'delivered', 'dead')`
+    ),
+    check("job_outbox_command_ck", sql`jsonb_typeof(${t.command}) = 'object'`),
+    check(
+      "job_outbox_attempts_ck",
+      sql`${t.deliveryAttempts} >= 0 AND ${t.maxDeliveries} BETWEEN 1 AND 20 AND ${t.deliveryAttempts} <= ${t.maxDeliveries}`
+    ),
+    check(
+      "job_outbox_claim_ck",
+      sql`(${t.state} = 'claimed' AND ${t.claimToken} IS NOT NULL AND ${t.claimedUntil} IS NOT NULL) OR (${t.state} <> 'claimed' AND ${t.claimToken} IS NULL AND ${t.claimedUntil} IS NULL)`
+    ),
+    check(
+      "job_outbox_delivery_ck",
+      sql`(${t.state} = 'delivered' AND ${t.deliveredAt} IS NOT NULL) OR (${t.state} <> 'delivered' AND ${t.deliveredAt} IS NULL)`
     ),
   ]
 );
