@@ -86,3 +86,22 @@ test("jobs retain retry limits and state with database checks", () => {
   assert.equal(cols.maxAttempts.notNull, true);
   assert.ok(getTableConfig(jobs).checks.length > 0);
 });
+
+test("composite foreign key targets are table-level unique constraints available before ALTER TABLE", () => {
+  const targets = [
+    [prospects, "prospects_workspace_id_uniq"],
+    [evidence, "evidence_prospect_id_uniq"],
+    [claims, "claims_prospect_id_uniq"],
+    [releases, "releases_prospect_id_uniq"],
+    [previews, "previews_prospect_preview_release_uniq"],
+  ];
+  for (const [table, constraintName] of targets) {
+    const config = getTableConfig(table);
+    assert.ok(
+      config.uniqueConstraints.some(
+        (constraint) => constraint.name === constraintName
+      ),
+      `${config.name}: ${constraintName} must be declared with unique(), not uniqueIndex()`
+    );
+  }
+});

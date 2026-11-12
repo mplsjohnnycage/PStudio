@@ -8,6 +8,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
@@ -46,7 +47,7 @@ export const prospects = pgTable(
   },
   (t) => [
     index("prospects_workspace_stage_idx").on(t.workspaceId, t.stage),
-    uniqueIndex("prospects_workspace_id_uniq").on(t.workspaceId, t.id),
+    unique("prospects_workspace_id_uniq").on(t.workspaceId, t.id),
     check(
       "prospects_website_status_ck",
       sql`(${t.websiteStatus} = 'unknown' AND ${t.websiteUrl} IS NULL) OR (${t.websiteStatus} = 'known' AND ${t.websiteUrl} IS NOT NULL)`
@@ -97,7 +98,7 @@ export const evidence = pgTable(
     type: text("type").notNull(),
   },
   (t) => [
-    uniqueIndex("evidence_prospect_id_uniq").on(t.prospectId, t.id),
+    unique("evidence_prospect_id_uniq").on(t.prospectId, t.id),
     index("evidence_prospect_capture_idx").on(t.prospectId, t.capturedAt),
     check(
       "evidence_sha256_ck",
@@ -121,7 +122,7 @@ export const claims = pgTable(
     value: text("value"),
   },
   (t) => [
-    uniqueIndex("claims_prospect_id_uniq").on(t.prospectId, t.id),
+    unique("claims_prospect_id_uniq").on(t.prospectId, t.id),
     index("claims_prospect_field_idx").on(t.prospectId, t.field),
     check(
       "claims_kind_ck",
@@ -195,7 +196,7 @@ export const releases = pgTable(
   },
   (t) => [
     uniqueIndex("releases_prospect_version_uniq").on(t.prospectId, t.version),
-    uniqueIndex("releases_prospect_id_uniq").on(t.prospectId, t.id),
+    unique("releases_prospect_id_uniq").on(t.prospectId, t.id),
     check("release_version_positive_ck", sql`${t.version} > 0`),
   ]
 );
@@ -215,7 +216,7 @@ export const previews = pgTable(
       columns: [t.prospectId, t.releaseId],
       foreignColumns: [releases.prospectId, releases.id],
     }).onDelete("restrict"),
-    uniqueIndex("previews_prospect_preview_release_uniq").on(
+    unique("previews_prospect_preview_release_uniq").on(
       t.prospectId,
       t.id,
       t.releaseId

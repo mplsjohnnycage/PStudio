@@ -1,0 +1,25 @@
+{
+  "name": "@prospect-studio/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "check-types": "tsc --noEmit",
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest run tests/unit --no-file-parallelism --maxWorkers=1",
+    "test:integration": "vitest run tests/integration --no-file-parallelism --maxWorkers=1"
+  },
+  "dependencies": {
+    "@rivet-dev/workflows": "1.1.1",
+    "rivetkit": "3.1.1"
+  },
+  "devDependencies": {
+    "@prospect-studio/config": "*",
+    "@types/node": "^26.4.1",
+    "tsx": "^4.23.13",
+    "typescript": "^6.0.3",
+    "vitest": "^3.2.4"
+  }
+}
