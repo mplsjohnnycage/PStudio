@@ -26,6 +26,27 @@ export const workspaces = pgTable("workspaces", {
   name: text("name").notNull(),
 });
 
+/** Users are issued by Neon Auth; this table only grants workspace roles. */
+export const workspaceMemberships = pgTable(
+  "workspace_memberships",
+  {
+    createdAt: createdAt(),
+    role: text("role").notNull().default("viewer"),
+    userId: text("user_id").notNull(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "restrict" }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.userId] }),
+    index("membership_user_workspace_idx").on(t.userId, t.workspaceId),
+    check(
+      "membership_role_ck",
+      sql`${t.role} IN ('owner', 'operator', 'viewer')`
+    ),
+  ]
+);
+
 export const prospects = pgTable(
   "prospects",
   {

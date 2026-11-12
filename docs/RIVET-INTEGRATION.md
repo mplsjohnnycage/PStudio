@@ -32,3 +32,7 @@
 5. Capture recovery and observability evidence before production release.
 
 See `docs/NEON-SETUP-STATUS.md` for the separate database/service blockers.
+
+## Follow-up: authenticated read boundary
+
+`docs/AUTH-JOBS-API.md` describes the new read-only Hono jobs API and workspace-member checks in the `feat/workspace-auth-read` change. This does **not** implement job writes, the Rivet dispatch/outbox or production Neon Auth provisioning. Keep direct Rivet actor endpoints inaccessible to browsers.
