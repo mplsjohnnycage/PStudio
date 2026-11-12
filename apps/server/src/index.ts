@@ -4,6 +4,7 @@ import { onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { appRouter } from "@prospect-studio/api/routers/index";
+import { enqueueWorkspaceJob } from "@prospect-studio/db/job-enqueue";
 import { readWorkspaceJobs } from "@prospect-studio/db/job-queries";
 import { initLogger } from "evlog";
 import { createFsDrain } from "evlog/fs";
@@ -13,6 +14,7 @@ import { cors } from "hono/cors";
 import { createNeonTokenVerifier } from "./auth";
 import { createContext } from "./context";
 import { ENV } from "./env.server";
+import { createJobEnqueueRoutes } from "./job-enqueue-api";
 import { createJobsRoutes } from "./jobs-api";
 import { db } from "./services";
 
@@ -31,7 +33,7 @@ app.use(
 app.use(
   "/*",
   cors({
-    allowHeaders: ["Authorization", "Content-Type"],
+    allowHeaders: ["Authorization", "Content-Type", "Idempotency-Key"],
     allowMethods: ["GET", "POST", "OPTIONS"],
     origin: ENV.CORS_ORIGIN,
   })
@@ -46,6 +48,15 @@ app.route(
   "/v1",
   createJobsRoutes({
     read: (userId, workspaceId) => readWorkspaceJobs(db, userId, workspaceId),
+    verify,
+  })
+);
+
+app.route(
+  "/v1",
+  createJobEnqueueRoutes({
+    enqueue: (userId, workspaceId, prospectId, key) =>
+      enqueueWorkspaceJob(db, userId, workspaceId, prospectId, key),
     verify,
   })
 );
