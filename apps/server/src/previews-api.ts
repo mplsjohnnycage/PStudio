@@ -1,7 +1,14 @@
+import type { PreviewDesignOptions } from "@prospect-studio/db/preview-render";
 import { Hono } from "hono";
+import { z } from "zod";
 import type { VerifyIdentity } from "./auth";
 
 const RESOURCE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+const designInput = z.strictObject({
+  design: z.enum(["editorial", "atelier", "modern"]).optional(),
+  headline: z.string().trim().min(1).max(140).optional(),
+  introduction: z.string().trim().min(1).max(500).optional(),
+});
 
 export type CreatePreviewResult =
   | { kind: "created"; previewId: string; releaseId: string; version: number }
@@ -25,7 +32,8 @@ export interface PreviewsDependencies {
   create: (
     userId: string,
     workspaceId: string,
-    prospectId: string
+    prospectId: string,
+    designOptions?: PreviewDesignOptions
   ) => Promise<CreatePreviewResult>;
   list: (
     userId: string,
@@ -60,8 +68,27 @@ export function createPreviewsRoutes(deps: PreviewsDependencies) {
       if (!(RESOURCE_ID.test(workspaceId) && RESOURCE_ID.test(prospectId))) {
         return c.json({ error: "invalid_resource_id" }, 400);
       }
+      let requested: unknown;
       try {
-        const result = await deps.create(userId, workspaceId, prospectId);
+        const body = await c.req.text();
+        if (body.length > 1500) {
+          return c.json({ error: "invalid_input" }, 400);
+        }
+        requested = body.trim() ? JSON.parse(body) : {};
+      } catch {
+        return c.json({ error: "invalid_json" }, 400);
+      }
+      const parsed = designInput.safeParse(requested);
+      if (!parsed.success) {
+        return c.json({ error: "invalid_input" }, 400);
+      }
+      try {
+        const result = await deps.create(
+          userId,
+          workspaceId,
+          prospectId,
+          parsed.data
+        );
         return result.kind === "not_found"
           ? c.json({ error: "not_found" }, 404)
           : c.json(

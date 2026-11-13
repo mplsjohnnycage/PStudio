@@ -5,6 +5,7 @@ import { admitSourcedProspect } from "@prospect-studio/db/admission-queries";
 import { enqueueWorkspaceJob } from "@prospect-studio/db/job-enqueue";
 import {
   createWorkspacePreview,
+  listWorkspacePreviews,
   readPrivatePreview,
 } from "@prospect-studio/db/preview-queries";
 import {
@@ -166,6 +167,25 @@ describe.skipIf(!ENABLED)(
       expect(attempts.at(0)?.state).toBe("completed");
 
       checkpoint("rivet_job_completed");
+      // The worker itself must have persisted the first private site draft.
+      // This is not the manual operator preview created below.
+      const generated = await listWorkspacePreviews(
+        db,
+        userId,
+        workspaceId,
+        admitted.prospectId
+      );
+      expect(generated?.length).toBeGreaterThanOrEqual(1);
+      expect(generated?.at(0)?.version).toBe(1);
+      const autoPreview = await readPrivatePreview(
+        db,
+        userId,
+        workspaceId,
+        generated?.at(0)?.previewId ?? ""
+      );
+      expect(autoPreview?.html).toContain("MCCLOSKEYS PAINTING AND REPAIR");
+      expect(autoPreview?.html).toMatch(HISTORICAL_REGISTRY);
+      checkpoint("worker_auto_site_generated");
       const draft = await createWorkspacePreview(
         db,
         userId,
@@ -173,6 +193,9 @@ describe.skipIf(!ENABLED)(
         admitted.prospectId
       );
       expect(draft.kind).toBe("created");
+      if (draft.kind === "created") {
+        expect(draft.version).toBe(2);
+      }
       if (draft.kind !== "created") {
         throw new Error("preview creation failed");
       }

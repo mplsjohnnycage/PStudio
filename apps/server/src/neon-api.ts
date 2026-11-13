@@ -1,6 +1,7 @@
 import { createDb } from "@prospect-studio/db";
 import { admitSourcedProspect } from "@prospect-studio/db/admission-queries";
 import { listWorkspaceAgentEvents } from "@prospect-studio/db/agent-session-queries";
+import { listProspectEvidence } from "@prospect-studio/db/evidence-queries";
 import { enqueueWorkspaceJob } from "@prospect-studio/db/job-enqueue";
 import { readWorkspaceJobs } from "@prospect-studio/db/job-queries";
 import {
@@ -27,6 +28,7 @@ import { cors } from "hono/cors";
 import { createAgentRoutes } from "./agent-broker";
 import { createNeonTokenVerifier } from "./auth";
 import { createDiscoveryRoutes } from "./discovery-api";
+import { createEvidenceRoutes } from "./evidence-api";
 import { createJobEnqueueRoutes } from "./job-enqueue-api";
 import { createJobsRoutes } from "./jobs-api";
 import { searchMinneapolisLicense } from "./minneapolis-license-source";
@@ -136,6 +138,14 @@ export function createNeonApi(config: NeonFunctionConfiguration) {
   );
   app.route(
     "/v1",
+    createEvidenceRoutes({
+      read: (userId, workspaceId, prospectId) =>
+        listProspectEvidence(db, userId, workspaceId, prospectId),
+      verify,
+    })
+  );
+  app.route(
+    "/v1",
     createJobsRoutes({
       read: (userId, workspaceId) => readWorkspaceJobs(db, userId, workspaceId),
       verify,
@@ -153,8 +163,8 @@ export function createNeonApi(config: NeonFunctionConfiguration) {
   app.route(
     "/v1",
     createPreviewsRoutes({
-      create: (userId, workspaceId, prospectId) =>
-        createWorkspacePreview(db, userId, workspaceId, prospectId),
+      create: (userId, workspaceId, prospectId, options) =>
+        createWorkspacePreview(db, userId, workspaceId, prospectId, options),
       list: (userId, workspaceId, prospectId) =>
         listWorkspacePreviews(db, userId, workspaceId, prospectId),
       read: (userId, workspaceId, previewId) =>

@@ -1,15 +1,19 @@
 import { createHash } from "node:crypto";
-import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import type { SourceCandidate } from "./admission-queries";
 import type { Database } from "./index";
+import { renderProspectPreview } from "./preview-render";
 import {
   claimEvidence,
   claims,
   evidence,
   jobAttempts,
   jobs,
+  previews,
   prospectExternalIds,
   prospects,
+  releaseArtifacts,
+  releases,
 } from "./schema/index";
 
 export interface EnrichmentClaim {
@@ -242,6 +246,67 @@ export function completeEnrichmentAttempt(
         }))
       );
     }
+    // A successful source-backed job also produces a durable private draft.
+    // The locked prospect serializes version allocation with manual versions.
+    // Publication and review decisions are deliberately left to the owner.
+    const [business] = await tx
+      .select({
+        name: prospects.name,
+        physicalAddress: prospects.physicalAddress,
+        websiteUrl: prospects.websiteUrl,
+      })
+      .from(prospects)
+      .where(eq(prospects.id, record.prospectId))
+      .limit(1)
+      .for("update");
+    if (!business) {
+      throw new Error("Missing prospect during enrichment");
+    }
+    const [previous] = await tx
+      .select({ version: releases.version })
+      .from(releases)
+      .where(eq(releases.prospectId, record.prospectId))
+      .orderBy(desc(releases.version))
+      .limit(1);
+    const version = (previous?.version ?? 0) + 1;
+    const releaseId = idFor("release", [jobId, attempt]);
+    const previewId = idFor("preview", [jobId, attempt]);
+    const html = renderProspectPreview({
+      designVersion: version,
+      name: business.name,
+      physicalAddress:
+        business.physicalAddress ?? candidate.physicalAddress ?? null,
+      provenance: {
+        capturedAt: candidate.retrievedAt,
+        evidenceId,
+        kind: "external_source",
+        sourceExcerpt: candidate.sourceExcerpt,
+        sourceUri: candidate.sourceUri,
+        title: candidate.sourceTitle,
+      },
+      websiteUrl: business.websiteUrl,
+    });
+    await tx.insert(releases).values({
+      artifactObjectKey: `release_artifacts/${releaseId}`,
+      id: releaseId,
+      prospectId: record.prospectId,
+      status: "draft",
+      version,
+    });
+    await tx.insert(releaseArtifacts).values({
+      html,
+      prospectId: record.prospectId,
+      releaseId,
+      sha256: createHash("sha256").update(html).digest("hex"),
+    });
+    await tx.insert(previews).values({
+      expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+      id: previewId,
+      prospectId: record.prospectId,
+      releaseId,
+      state: "draft",
+    });
+
     await tx
       .update(prospects)
       .set({ stage: "enriched", updatedAt: now })

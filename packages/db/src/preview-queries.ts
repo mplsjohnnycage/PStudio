@@ -1,7 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, gt, or } from "drizzle-orm";
 import type { Database } from "./index";
-import { renderProspectPreview } from "./preview-render";
+import {
+  type PreviewDesignOptions,
+  renderProspectPreview,
+} from "./preview-render";
 import {
   evidence,
   previews,
@@ -20,7 +23,8 @@ export function createWorkspacePreview(
   db: Database,
   userId: string,
   workspaceId: string,
-  prospectId: string
+  prospectId: string,
+  designOptions: PreviewDesignOptions = {}
 ): Promise<PreviewCreation> {
   return db.transaction(async (tx): Promise<PreviewCreation> => {
     const authorized = await tx
@@ -64,6 +68,7 @@ export function createWorkspacePreview(
         capturedAt: evidence.capturedAt,
         evidenceId: evidence.id,
         kind: evidence.type,
+        sourceExcerpt: evidence.excerpt,
         sourceUri: evidence.sourceUri,
         title: evidence.title,
       })
@@ -72,6 +77,8 @@ export function createWorkspacePreview(
       .orderBy(desc(evidence.capturedAt))
       .limit(1);
     const html = renderProspectPreview({
+      ...designOptions,
+      designVersion: version,
       ...(origin &&
       (origin.kind === "external_source" || origin.kind === "operator_report")
         ? {
@@ -79,6 +86,7 @@ export function createWorkspacePreview(
               capturedAt: origin.capturedAt,
               evidenceId: origin.evidenceId,
               kind: origin.kind,
+              sourceExcerpt: origin.sourceExcerpt,
               sourceUri: origin.sourceUri,
               title: origin.title,
             },

@@ -24,6 +24,18 @@ const PATTERNS = {
   p8: /http-equiv="refresh"/,
 };
 
+const FULL_SITE_PATTERNS = {
+  approval: /Not approved for publication or outreach/,
+  business: /Craft a distinct digital presence/,
+  contact: /Get in touch/,
+  escapeImage: /&lt;img src=x onerror=alert\(1\)&gt;/,
+  escapeScript: /&lt;script&gt;alert\(1\)&lt;\/script&gt;/,
+  html: /DOCTYPE html/i,
+  proof: /Work &amp; proof/,
+  rawImage: /<img src=x/,
+  rawScript: /<script>/,
+  services: /Services/,
+};
 test("pilot preview preserves reported details without inventing claims", () => {
   const html = renderProspectPreview({
     name: "Operator <script>alert(1)</script>",
@@ -86,4 +98,41 @@ test("general external-source preview is not mislabeled historical", () => {
   });
   assert.match(html, PUBLIC_PROVENANCE.external);
   assert.doesNotMatch(html, PUBLIC_PROVENANCE.historical);
+});
+
+test("three independently rendered design directions create exportable full-page HTML", () => {
+  const base = {
+    headline: "Craft a distinct digital presence",
+    introduction: "Operator-directed draft; service details await approval.",
+    name: "Northern Workshop",
+    physicalAddress: "St Paul, MN",
+    websiteUrl: null,
+  };
+  const a = renderProspectPreview({ ...base, design: "editorial" });
+  const b = renderProspectPreview({ ...base, design: "atelier" });
+  const c = renderProspectPreview({ ...base, design: "modern" });
+  assert.notEqual(a, b);
+  assert.notEqual(b, c);
+  for (const html of [a, b, c]) {
+    assert.match(html, FULL_SITE_PATTERNS.business);
+    assert.match(html, FULL_SITE_PATTERNS.services);
+    assert.match(html, FULL_SITE_PATTERNS.proof);
+    assert.match(html, FULL_SITE_PATTERNS.contact);
+    assert.match(html, FULL_SITE_PATTERNS.html);
+    assert.match(html, FULL_SITE_PATTERNS.approval);
+  }
+});
+
+test("operator-authored headline and introduction are escaped, never executable", () => {
+  const html = renderProspectPreview({
+    headline: "<img src=x onerror=alert(1)>",
+    introduction: "<script>alert(1)</script>",
+    name: "Example",
+    physicalAddress: null,
+    websiteUrl: null,
+  });
+  assert.match(html, FULL_SITE_PATTERNS.escapeImage);
+  assert.match(html, FULL_SITE_PATTERNS.escapeScript);
+  assert.doesNotMatch(html, FULL_SITE_PATTERNS.rawImage);
+  assert.doesNotMatch(html, FULL_SITE_PATTERNS.rawScript);
 });

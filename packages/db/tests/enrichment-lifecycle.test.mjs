@@ -16,8 +16,11 @@ import {
   evidence,
   jobAttempts,
   jobs,
+  previews,
   prospectExternalIds,
   prospects,
+  releaseArtifacts,
+  releases,
   workspaceMemberships,
   workspaces,
 } from "../src/schema/index.ts";
@@ -118,6 +121,13 @@ test("enrichment persists real-shaped sourced evidence, claims, attempt and term
     assert.equal((await f.db.select().from(evidence)).length, 1);
     const attempts = await f.db.select().from(jobAttempts);
     assert.equal(attempts[0].state, "completed");
+    const drafts = await f.db.select().from(previews);
+    const artifacts = await f.db.select().from(releaseArtifacts);
+    assert.equal(drafts.length, 1, "enrichment creates one private draft");
+    assert.equal((await f.db.select().from(releases))[0].version, 1);
+    assert.equal(artifacts.length, 1);
+    assert.ok(artifacts[0].html.includes("Fixture Repair LLC"));
+    assert.ok(artifacts[0].html.includes("external source"));
     assert.equal(
       (
         await completeEnrichmentAttempt(
@@ -128,6 +138,11 @@ test("enrichment persists real-shaped sourced evidence, claims, attempt and term
         )
       ).kind,
       "already_completed"
+    );
+    assert.equal(
+      (await f.db.select().from(previews)).length,
+      1,
+      "replay must not duplicate the draft"
     );
     assert.equal(await beginEnrichmentAttempt(f.db, f.jobId), null);
     assert.equal(
