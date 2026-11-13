@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { Database } from "./index";
 import {
   claimEvidence,
@@ -36,6 +36,7 @@ export async function listWorkspaceProspects(
   }
   return db
     .select({
+      hasExternalSource: sql<boolean>`EXISTS (SELECT 1 FROM prospect_external_ids AS source_id WHERE source_id.prospect_id = ${prospects.id} AND source_id.workspace_id = ${workspaceId})`,
       id: prospects.id,
       name: prospects.name,
       physicalAddress: prospects.physicalAddress,

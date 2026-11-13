@@ -150,3 +150,50 @@ test("private preview history is tenant-scoped and versioned", async () => {
     404
   );
 });
+
+test("preview generation accepts only bounded, explicit design fields", async () => {
+  const forwarded = [];
+  const app = createPreviewsRoutes({
+    create: (user, workspace, prospect, options) => {
+      forwarded.push({ options, prospect, user, workspace });
+      return Promise.resolve({
+        kind: "created",
+        previewId: "preview-2",
+        releaseId: "release-2",
+        version: 2,
+      });
+    },
+    read: () => Promise.resolve(null),
+    verify: async (header) => (header === auth.Authorization ? "owner" : null),
+  });
+  const url = `${base}/prospects/p-one/previews`;
+  const allowed = await app.request(url, {
+    body: JSON.stringify({
+      design: "atelier",
+      headline: "Workshop",
+      introduction: "Operator draft.",
+    }),
+    headers: { ...auth, "Content-Type": "application/json" },
+    method: "POST",
+  });
+  assert.equal(allowed.status, 201);
+  assert.deepEqual(forwarded[0].options, {
+    design: "atelier",
+    headline: "Workshop",
+    introduction: "Operator draft.",
+  });
+  for (const payload of [
+    { design: "bad" },
+    { headline: "<script>", unexpected: true },
+    { introduction: "a".repeat(501) },
+  ]) {
+    // biome-ignore lint/performance/noAwaitInLoops: rejection cases are intentionally validated sequentially.
+    const response = await app.request(url, {
+      body: JSON.stringify(payload),
+      headers: { ...auth, "Content-Type": "application/json" },
+      method: "POST",
+    });
+    assert.equal(response.status, 400);
+  }
+  assert.equal(forwarded.length, 1, "invalid design must never reach database");
+});

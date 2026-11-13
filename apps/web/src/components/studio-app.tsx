@@ -48,12 +48,30 @@ interface Workspace {
   role: string;
 }
 interface Prospect {
+  hasExternalSource: boolean;
   id: string;
   name: string;
   physicalAddress: string | null;
   stage: string;
   websiteStatus: string;
   websiteUrl: string | null;
+}
+interface EvidenceFeed {
+  claims: {
+    field: string;
+    id: string;
+    kind: string;
+    observedAt: string;
+    value: string | null;
+  }[];
+  evidence: {
+    capturedAt: string;
+    id: string;
+    sha256: string;
+    sourceUri: string;
+    title: string;
+    type: string;
+  }[];
 }
 interface Job {
   attempt: number;
@@ -283,6 +301,7 @@ export function StudioApp() {
   const [selected, setSelected] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewVersions, setPreviewVersions] = useState<PreviewVersion[]>([]);
+  const [evidenceFeed, setEvidenceFeed] = useState<EvidenceFeed | null>(null);
   const [review, setReview] = useState<Review | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showWorkspaceCreate, setShowWorkspaceCreate] = useState(false);
@@ -307,6 +326,11 @@ export function StudioApp() {
   const [studioDevice, setStudioDevice] = useState<"desktop" | "mobile">(
     "desktop"
   );
+  const [designDirection, setDesignDirection] = useState<
+    "editorial" | "atelier" | "modern"
+  >("editorial");
+  const [draftHeadline, setDraftHeadline] = useState("");
+  const [draftIntroduction, setDraftIntroduction] = useState("");
   const [mobileSheetExpanded, setMobileSheetExpanded] = useState(false);
   const [sheetTouchY, setSheetTouchY] = useState<number | null>(null);
   const [mobileMeasuresOpen, setMobileMeasuresOpen] = useState(false);
@@ -377,6 +401,34 @@ export function StudioApp() {
       .catch(() => setPreviewVersions([]));
   }, [workspaceId, selected]);
 
+  const completedJobCount = jobs.filter(
+    (job) => job.state === "completed"
+  ).length;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: finished background jobs invalidate the stored evidence view.
+  useEffect(() => {
+    if (!(workspaceId && selected)) {
+      setEvidenceFeed(null);
+      return;
+    }
+    let active = true;
+    void studioApi<EvidenceFeed>(
+      `/workspaces/${workspaceId}/prospects/${selected}/evidence`
+    )
+      .then((feed) => {
+        if (active) {
+          setEvidenceFeed(feed);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setEvidenceFeed(null);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [completedJobCount, selected, workspaceId]);
+
   const current = workspaces.find((w) => w.id === workspaceId);
   const isOperator = current?.role === "owner" || current?.role === "operator";
   const chosen = prospects.find((p) => p.id === selected);
@@ -397,6 +449,64 @@ export function StudioApp() {
   const statusJobs = chosen
     ? jobs.filter((j) => j.prospectId === chosen.id)
     : [];
+  const processingJobs = jobs.some((job) =>
+    ["queued", "running", "retrying"].includes(job.state)
+  );
+  // Durable jobs continue on the Sprite; refresh until a terminal state arrives.
+  useEffect(() => {
+    if (!(workspaceId && session?.user?.id && processingJobs)) {
+      return;
+    }
+    const timer = setInterval(() => {
+      void refresh(workspaceId).catch(() => {
+        // Leave the current job state visible; allow the next poll to recover.
+      });
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [processingJobs, refresh, session?.user?.id, workspaceId]);
+
+  // The worker produces a private versioned HTML draft on successful enrichment.
+  useEffect(() => {
+    if (
+      !(
+        workspaceId &&
+        selected &&
+        jobs.some(
+          (job) => job.prospectId === selected && job.state === "completed"
+        )
+      )
+    ) {
+      return;
+    }
+    let active = true;
+    const ws = workspaceId;
+    const prospectId = selected;
+    void studioApi<{ previews: PreviewVersion[] }>(
+      `/workspaces/${ws}/prospects/${prospectId}/previews`
+    )
+      .then(async (result) => {
+        if (!active) {
+          return;
+        }
+        setPreviewVersions(result.previews);
+        const [newest] = result.previews;
+        if (newest && !preview) {
+          const draft = await studioApi<Preview>(
+            `/workspaces/${ws}/previews/${newest.previewId}`
+          );
+          if (active) {
+            setPreview(draft);
+          }
+        }
+      })
+      .catch(() => {
+        // The job is durable; a subsequent selection or reload can read the draft.
+      });
+    return () => {
+      active = false;
+    };
+  }, [jobs, preview, selected, workspaceId]);
+
   const stageCounts = useMemo(
     () => ({
       all: prospects.length,
@@ -491,11 +601,32 @@ export function StudioApp() {
         await refresh(workspaceId);
         setSelected(prospectId);
         setDiscoveryExternalId("");
-        setNotice(
-          kind === "duplicate"
-            ? "Existing sourced prospect selected; duplicate record not created."
-            : "Imported historical municipal license evidence. Current business and license status remain unverified."
-        );
+        if (kind === "duplicate") {
+          setNotice(
+            "Existing sourced prospect selected; duplicate record not created. Review its job status or generate another draft."
+          );
+          return;
+        }
+        // One deliberate import action starts the supported fixed-source workflow.
+        // If enqueue fails, admission remains durable and can be retried manually.
+        try {
+          await studioApi(
+            `/workspaces/${workspaceId}/prospects/${prospectId}/jobs`,
+            {
+              body: JSON.stringify({ type: "enrich" }),
+              headers: { "Idempotency-Key": `import-${prospectId}` },
+              method: "POST",
+            }
+          );
+          await refresh(workspaceId);
+          setNotice(
+            "Historical municipal source imported and enrichment queued. A private site draft will be generated automatically after the source is checked."
+          );
+        } catch (importFailure) {
+          setNotice(
+            `Source record saved, but enrichment was not queued: ${importFailure instanceof Error ? importFailure.message : "Unknown error"}. Use source enrichment to retry.`
+          );
+        }
       }
     );
   }
@@ -514,10 +645,29 @@ export function StudioApp() {
       async () => {
         await refresh(workspaceId);
         setNotice(
-          "Enrichment command queued. Processing depends on the separate worker runtime."
+          "Enrichment queued. The production Sprite processes it automatically and saves a private site draft when complete."
         );
       }
     );
+  }
+  function downloadPrivateHtml() {
+    if (!(preview && chosen)) {
+      return;
+    }
+    const artifact = new Blob([preview.html], {
+      type: "text/html;charset=utf-8",
+    });
+    const url = URL.createObjectURL(artifact);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${chosen.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .slice(0, 52)}-draft-v${preview.version}.html`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
   async function createPreview(prospectId: string) {
     await action(
@@ -525,7 +675,18 @@ export function StudioApp() {
       () =>
         studioApi<{ previewId: string }>(
           `/workspaces/${workspaceId}/prospects/${prospectId}/previews`,
-          { body: "{}", method: "POST" }
+          {
+            body: JSON.stringify({
+              design: designDirection,
+              ...(draftHeadline.trim()
+                ? { headline: draftHeadline.trim() }
+                : {}),
+              ...(draftIntroduction.trim()
+                ? { introduction: draftIntroduction.trim() }
+                : {}),
+            }),
+            method: "POST",
+          }
         ),
       async (res) => {
         const details = await studioApi<Preview>(
@@ -780,6 +941,49 @@ export function StudioApp() {
           </button>
         </div>
       ) : null}
+      {workspaceId && prospects.length === 0 && view === "map" ? (
+        <section
+          aria-label="Start your first prospect workflow"
+          className="studio-onboarding"
+        >
+          <div>
+            <span className="studio-eyebrow">WORKSPACE READY · FIRST RUN</span>
+            <h2>
+              Turn your first business into a sourced, reviewable website
+              concept.
+            </h2>
+            <p>
+              Start with a business you know, or import a historical public
+              record to run source enrichment through Rivet Cloud and the Sprite
+              worker. Concepts remain private until you approve them.
+            </p>
+          </div>
+          <div className="studio-onboarding-actions">
+            <button
+              className="studio-btn-primary"
+              onClick={() => setShowCreate(true)}
+              type="button"
+            >
+              <Plus size={16} /> Add a business
+            </button>
+            <button
+              className="studio-btn-secondary"
+              onClick={() => {
+                setDiscoveryQuery("MCCLOSKEY");
+                setDiscoveryExternalId("TLIC19984");
+                setSidebar(true);
+                setMobileSheetExpanded(true);
+                setNotice(
+                  "Historical Minneapolis example filled into the source-import form. Review and choose Import sourced record."
+                );
+              }}
+              type="button"
+            >
+              <Search size={16} /> Try a sourced example
+            </button>
+          </div>
+        </section>
+      ) : null}
       {view === "map" ? (
         <div
           className={`studio-main-grid prototype-main-grid ${chosen ? "has-detail" : "no-detail"}`}
@@ -904,9 +1108,19 @@ export function StudioApp() {
                     <div className="studio-empty-list">
                       <Building2 size={26} />
                       <p>
-                        No matching prospects. Import a business to start the
-                        pipeline.
+                        {prospects.length === 0
+                          ? "Your workspace is ready. Add a business to create a private site concept, or import a historical Minneapolis record to run the full sourced pipeline."
+                          : "No prospects match the current search and filters."}
                       </p>
+                      {prospects.length === 0 && isOperator ? (
+                        <button
+                          className="studio-btn-primary"
+                          onClick={() => setShowCreate(true)}
+                          type="button"
+                        >
+                          <Plus size={16} /> Add your first prospect
+                        </button>
+                      ) : null}
                     </div>
                   ) : (
                     filtered.map((p) => (
@@ -1109,13 +1323,54 @@ export function StudioApp() {
                     <div className="studio-source">
                       <Shield size={18} />
                       <div>
-                        <strong>Operator-reported</strong>
+                        <strong>
+                          {chosen.hasExternalSource
+                            ? "Historical public registry"
+                            : "Operator-reported"}
+                        </strong>
                         <p>
-                          Not externally verified. Inspect source evidence
-                          before publishing claims.
+                          {chosen.hasExternalSource
+                            ? "Registry evidence is sourced, but business activity and license status remain unverified."
+                            : "Operator-provided details are unverified. Add a sourced record for registry enrichment."}
                         </p>
                       </div>
                     </div>
+                  </div>
+                  <div className="studio-info-block">
+                    <span>SOURCED EVIDENCE &amp; REPORTED CLAIMS</span>
+                    <strong>
+                      {evidenceFeed
+                        ? `${evidenceFeed.evidence.length} sources · ${evidenceFeed.claims.length} claims`
+                        : "Loading source history"}
+                    </strong>
+                    {evidenceFeed?.evidence.slice(0, 3).map((item) => (
+                      <div key={item.id}>
+                        <p>{item.title}</p>
+                        <small>
+                          {item.type.replaceAll("_", " ")} ·{" "}
+                          {new Date(item.capturedAt).toLocaleDateString()}
+                        </small>
+                        {item.sourceUri.startsWith("https://") ? (
+                          <a
+                            href={item.sourceUri}
+                            rel="noopener noreferrer"
+                            target="_blank"
+                          >
+                            Inspect original source <ExternalLink size={13} />
+                          </a>
+                        ) : null}
+                      </div>
+                    ))}
+                    {evidenceFeed?.claims.slice(0, 8).map((claim) => (
+                      <p key={claim.id}>
+                        <b>{claim.field}</b> · {claim.value ?? "Unknown"}{" "}
+                        <small>({claim.kind})</small>
+                      </p>
+                    ))}
+                    <p>
+                      Claims are attributed reports, not independently verified
+                      current facts.
+                    </p>
                   </div>
                   <div className="studio-pipeline-block">
                     <span className="studio-eyebrow">WORKFLOW ACTIONS</span>
@@ -1134,7 +1389,12 @@ export function StudioApp() {
                       </span>
                       <div>
                         <strong>02 / Enrichment</strong>
-                        <p>{statusJobs.at(0)?.state ?? "Not requested"}</p>
+                        <p>
+                          {statusJobs.at(0)?.state ??
+                            (chosen.hasExternalSource
+                              ? "Ready to run"
+                              : "Requires a sourced record")}
+                        </p>
                       </div>
                     </div>
                     <div className="studio-step">
@@ -1158,7 +1418,9 @@ export function StudioApp() {
                   </div>
                   <button
                     className="studio-btn-secondary"
-                    disabled={!isOperator || busy !== null}
+                    disabled={
+                      !isOperator || busy !== null || !chosen.hasExternalSource
+                    }
                     onClick={() => void enqueue(chosen.id)}
                     type="button"
                   >
@@ -1167,7 +1429,9 @@ export function StudioApp() {
                     ) : (
                       <Workflow size={17} />
                     )}{" "}
-                    Queue enrichment
+                    {chosen.hasExternalSource
+                      ? "Run source enrichment"
+                      : "Enrichment needs a public source"}
                   </button>
                   <button
                     className="studio-btn-primary"
@@ -1235,6 +1499,13 @@ export function StudioApp() {
                           </button>
                         </div>
                       ) : null}
+                      <button
+                        className="studio-btn-secondary"
+                        onClick={downloadPrivateHtml}
+                        type="button"
+                      >
+                        Download private HTML draft
+                      </button>
                       <iframe
                         loading="lazy"
                         sandbox=""
@@ -1307,6 +1578,45 @@ export function StudioApp() {
               {chosen ? (
                 <>
                   <p>{chosen.name}</p>
+                  <label>
+                    Visual direction
+                    <select
+                      onChange={(event) =>
+                        setDesignDirection(
+                          event.target.value as
+                            | "editorial"
+                            | "atelier"
+                            | "modern"
+                        )
+                      }
+                      value={designDirection}
+                    >
+                      <option value="editorial">Editorial · Sage</option>
+                      <option value="atelier">Atelier · Warm</option>
+                      <option value="modern">Modern · Cool</option>
+                    </select>
+                  </label>
+                  <label>
+                    Headline for this draft
+                    <input
+                      maxLength={140}
+                      onChange={(event) => setDraftHeadline(event.target.value)}
+                      placeholder={chosen.name}
+                      value={draftHeadline}
+                    />
+                  </label>
+                  <label>
+                    Introduction (operator draft, not verified)
+                    <textarea
+                      maxLength={500}
+                      onChange={(event) =>
+                        setDraftIntroduction(event.target.value)
+                      }
+                      placeholder="Describe the positioning you want to propose. Confirm business claims before publication."
+                      rows={4}
+                      value={draftIntroduction}
+                    />
+                  </label>
                   <button
                     className="studio-btn-primary"
                     disabled={!isOperator || busy !== null}

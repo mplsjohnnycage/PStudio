@@ -1525,3 +1525,50 @@
     display: none;
   }
 }
+
+/* An actual first-run action rather than an empty dashboard surface. */
+.studio-onboarding {
+  display: flex;
+  gap: 30px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 30px;
+  margin: 20px 24px;
+  background: linear-gradient(120deg, #293d2b, #16251f 70%);
+  border: 1px solid #647f5b77;
+  border-radius: 18px;
+}
+.studio-onboarding h2 {
+  max-width: 660px;
+  margin: 12px 0;
+  font-size: clamp(19px, 2vw, 28px);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+.studio-onboarding p {
+  max-width: 760px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #b7c8b6;
+}
+.studio-onboarding-actions {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.studio-onboarding-actions button {
+  white-space: normal;
+}
+@media (max-width: 850px) {
+  .studio-onboarding {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 20px;
+    margin: 12px;
+  }
+  .studio-onboarding-actions {
+    justify-content: flex-start;
+  }
+}
