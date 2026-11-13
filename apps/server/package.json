@@ -9,6 +9,7 @@
     "compile": "bun build --compile --no-compile-autoload-dotenv --minify --sourcemap --bytecode ./src/index.ts --outfile server",
     "dev": "tsx watch src/index.ts",
     "env:generate": "varlock codegen",
+    "package:neon": "python3 scripts/package-neon.py",
     "start": "node dist/index.mjs"
   },
   "dependencies": {

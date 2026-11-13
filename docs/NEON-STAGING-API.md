@@ -16,7 +16,7 @@ Every /v1 route requires a signed Managed Neon Auth JWT and database membership.
 
 ## Reproducible build
 
-Run npm ci; npm run check; npm run check-types; npm test; npm run build:neon -w server. The server output apps/server/dist-neon/neon-api.mjs must be fully self-contained with only Node built-in imports. Zip the ESM output as index.mjs; deploy via authenticated Neon Functions tool to slug pstudioapi with nodejs24 on the chosen branch.
+Run npm ci; npm run check; npm run check-types; npm test; npm run build:neon -w server; npm run package:neon -w server. The tsdown output includes one main file `neon-api.mjs` **and may include linked `*.mjs` chunks**. Package **all** emitted `*.mjs` with the helper; it maps the main file to `index.mjs` and retains every linked chunk. Never zip only the entry file when it imports siblings. Verify the archive locally by importing its extracted `index.mjs`, then deploy `apps/server/dist-neon/function.zip` using the authenticated Neon Functions tool to slug `pstudioapi` with nodejs24 **on staging first**.
 
 Neon injects DATABASE_URL, NEON_AUTH_BASE_URL and NEON_AUTH_JWKS_URL; never store those values in source, logs, Git or ChatGPT output. Custom function env only sets explicit safe CORS_ORIGIN values.
 
