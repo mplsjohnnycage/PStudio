@@ -204,6 +204,39 @@ export const jobs = pgTable(
   ]
 );
 
+/** Persisted execution attempts and safe failure codes; no credentials or raw error traces. */
+export const jobAttempts = pgTable(
+  "job_attempts",
+  {
+    attempt: integer("attempt").notNull(),
+    errorCode: text("error_code"),
+    evidenceId: text("evidence_id").references(() => evidence.id, {
+      onDelete: "restrict",
+    }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    jobId: text("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "restrict" }),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    state: text("state").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.jobId, t.attempt], name: "job_attempts_pk" }),
+    index("job_attempts_state_started_idx").on(t.state, t.startedAt),
+    check(
+      "job_attempts_state_ck",
+      sql.raw("state IN ('running','completed','retrying','failed')")
+    ),
+    check("job_attempts_attempt_ck", sql.raw("attempt BETWEEN 1 AND 20")),
+    check(
+      "job_attempts_error_code_ck",
+      sql.raw("error_code IS NULL OR (length(error_code) BETWEEN 1 AND 80)")
+    ),
+  ]
+);
+
 /** Transactional delivery queue; only authenticated server code may enqueue. */
 export const jobOutbox = pgTable(
   "job_outbox",
@@ -267,6 +300,30 @@ export const releases = pgTable(
     uniqueIndex("releases_prospect_version_uniq").on(t.prospectId, t.version),
     unique("releases_prospect_id_uniq").on(t.prospectId, t.id),
     check("release_version_positive_ck", sql`${t.version} > 0`),
+  ]
+);
+
+/** Immutable private HTML snapshots; object storage may replace the bytes later. */
+export const releaseArtifacts = pgTable(
+  "release_artifacts",
+  {
+    createdAt: createdAt(),
+    html: text("html").notNull(),
+    prospectId: text("prospect_id").notNull(),
+    releaseId: text("release_id")
+      .primaryKey()
+      .references(() => releases.id, { onDelete: "restrict" }),
+    sha256: text("sha256").notNull(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.prospectId, t.releaseId],
+      foreignColumns: [releases.prospectId, releases.id],
+    }).onDelete("restrict"),
+    check(
+      "release_artifacts_sha256_ck",
+      sql`length(${t.sha256}) = 64 AND ${t.sha256} ~ '^[a-f0-9]+$'`
+    ),
   ]
 );
 
@@ -387,6 +444,63 @@ export const outreachDrafts = pgTable(
     check(
       "outreach_drafts_state_ck",
       sql`${t.state} IN ('draft','ready','sent')`
+    ),
+  ]
+);
+
+/**
+ * Binds a Pi conversation to the authenticated user and workspace.
+ * LLM tool input never determines this identity; membership is rechecked.
+ */
+export const agentSessions = pgTable(
+  "agent_sessions",
+  {
+    createdAt: createdAt(),
+    id: text("id").primaryKey(),
+    lastActiveAt: timestamp("last_active_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    userId: text("user_id").notNull(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "restrict" }),
+  },
+  (t) => [
+    index("agent_sessions_workspace_user_idx").on(t.workspaceId, t.userId),
+    check("agent_session_id_ck", sql.raw("length(id) BETWEEN 8 AND 160")),
+  ]
+);
+
+/**
+ * Durable client-side movement events; model transcripts and OAuth secrets
+ * are deliberately excluded. Every read must recheck workspace membership.
+ */
+export const agentUiEvents = pgTable(
+  "agent_ui_events",
+  {
+    createdAt: createdAt(),
+    id: text("id").primaryKey(),
+    prospectId: text("prospect_id"),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => agentSessions.id, { onDelete: "restrict" }),
+    type: text("type").notNull(),
+    view: text("view"),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "restrict" }),
+  },
+  (t) => [
+    index("agent_ui_events_workspace_time_idx").on(t.workspaceId, t.createdAt),
+    check(
+      "agent_ui_events_type_ck",
+      sql.raw("type IN ('navigate','select_prospect')")
+    ),
+    check(
+      "agent_ui_events_shape_ck",
+      sql.raw(
+        "(type = 'navigate' AND view IN ('map','inbox','calendar','studio') AND prospect_id IS NULL) OR (type = 'select_prospect' AND prospect_id IS NOT NULL AND view IS NULL)"
+      )
     ),
   ]
 );

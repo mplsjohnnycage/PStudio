@@ -1,0 +1,39 @@
+{
+  "capturedAtUtc": "2026-11-12T20:06:06.758Z",
+  "testCommand": "PSTUDIO_LIVE_SOURCE_PGLITE_TEST=1 node --import tsx --test apps/server/tests/live-source-local-pg.test.mjs",
+  "status": "LOCAL_LIVE_SOURCE_PGLITE_ONLY",
+  "passed": true,
+  "note": "Real public data and durable local PGlite; no managed Neon Auth, Rivet, or browser.",
+  "approvalId": "approval_2c1d35a2afb740b05fb46388fe571808d3da4c9b",
+  "approvalState": "approved",
+  "artifactSha256": "b06ebb11a76ea3c83a5f551ddfaceddd52c0b968f52b257c98d98914b312e021",
+  "browserPreviewVerified": false,
+  "claimIds": [
+    "claim_489f7a8a-49d3-4228-a9d1-e16115c91c0d",
+    "claim_0131078d-35aa-460b-9e3b-cd36c6b8ed6f",
+    "claim_61d9be25-e681-4f2d-9b0f-8dda8d441d3e",
+    "claim_32ee7486-c485-4f20-8c19-1beefc6ea417",
+    "claim_86c0409d0403ec99798e2d6ead73231b033a7fa8d78cade2fd88b06bdf10fbf6",
+    "claim_a03201384cae37f373fbe7b0584da805e815dc6fc265ea785c153f2d26d9e566",
+    "claim_4dc1776cc9732d62e363bb1133119bc059f765381606c64c2fa0d443b2e41061",
+    "claim_1fce80bead97322faad9d7ec7cbb43564885cf3fd61558ecfc2f17e10711ddbe"
+  ],
+  "evidenceIds": [
+    "evidence_656fab81-8fd0-4e1f-966f-4bccfade938a",
+    "evidence_5ee5605289f897d73602c3260680c9ba265fbd8b12a928f2841d8df81c9cb1e4"
+  ],
+  "externalId": "TLIC19984",
+  "externalRivetVerified": false,
+  "jobId": "job_a0088d60f8dc026b4db9cc5e09e7e86bba62293d429bb21962dc66573cfd65dc",
+  "kind": "LIVE_SOURCE_LOCAL_DB_ONLY",
+  "name": "MCCLOSKEYS PAINTING AND REPAIR",
+  "neonAuthVerified": false,
+  "neonDatabaseVerified": false,
+  "persistedAfterRestart": true,
+  "previewId": "preview_1280885b-475e-4532-82c7-db8dae1de065",
+  "prospectId": "prospect_d07d1537-586d-4f61-9247-492d46d7b1de",
+  "releaseId": "release_bbe13032-de41-4997-a11e-1bf4b88515a6",
+  "sourceUri": "https://services.arcgis.com/afSMGVsC7QlRK1kZ/arcgis/rest/services/Residential_Specialty/FeatureServer/0/query?where=dbaName+LIKE+%27%25MCCLOSKEYS%25%27&outFields=licenseNumber%2CcontractorDesc%2CdbaName%2Caddress1%2Ccity%2Cstate%2Czip%2CexpirationDate%2CESRI_OID&returnGeometry=false&resultRecordCount=5&f=json",
+  "version": 1,
+  "workspaceId": "workspace_45491a86-1dcc-4d69-9213-7c2b4be514c1"
+}

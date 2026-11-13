@@ -20,6 +20,7 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.16",
     "@prospect-studio/config": "*",
     "@types/pg": "^8.23.1",
     "drizzle-kit": "0.31.11",

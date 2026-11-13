@@ -1,0 +1,26 @@
+{
+  "name": "@prospect-studio/vercel-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsdown --config tsdown.config.ts && tsc --noEmit && node scripts/verify-bundle.mjs",
+    "check-types": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@fly/sprites": "0.2.4",
+    "@orpc/server": "^1.15.6",
+    "@prospect-studio/api": "*",
+    "@prospect-studio/db": "*",
+    "hono": "^4.13.7",
+    "jose": "^6.2.17"
+  },
+  "devDependencies": {
+    "@prospect-studio/config": "*",
+    "@types/node": "^26.4.1",
+    "tsdown": "0.23.7",
+    "tsx": "^4.23.13",
+    "typescript": "^6.0.3"
+  }
+}

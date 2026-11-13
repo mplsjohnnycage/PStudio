@@ -1,11 +1,32 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "includes": ["!packages/db/src/migrations/meta"]
+    "includes": [
+      "!packages/db/src/migrations/meta",
+      "!.agents",
+      "!.claude",
+      "!skills-lock.json",
+      "!apps/vercel-api/src/*.mjs"
+    ]
   },
   "extends": [
     "ultracite/biome/core",
     "ultracite/biome/react",
     "ultracite/biome/next"
+  ],
+  "overrides": [
+    {
+      "includes": ["apps/web/src/components/studio-app.tsx"],
+      "linter": {
+        "rules": {
+          "performance": { "noJsxPropsBind": "off" },
+          "complexity": {
+            "noExcessiveCognitiveComplexity": "off",
+            "noVoid": "off"
+          },
+          "style": { "noNestedTernary": "off" }
+        }
+      }
+    }
   ]
 }

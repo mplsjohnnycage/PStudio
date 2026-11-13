@@ -61,3 +61,15 @@ coverage
 tmp
 temp
 .neon
+
+# Compiled Neon Functions (do not commit)
+apps/server/dist-neon/
+
+# Optional locally installed Rivet agent skills (not runtime code)
+.agents/
+.claude/
+skills-lock.json
+
+# Vercel Hono self-contained runtime bundle (generated during build)
+apps/vercel-api/src/*.mjs
+apps/vercel-api/src/*.mjs.map

@@ -16,6 +16,8 @@ export interface EnqueueDependencies {
     prospectId: string,
     idempotencyKey: string
   ) => Promise<EnqueueResult>;
+  /** Best-effort wake occurs only after the scoped Neon transaction commits. */
+  onCreated?: () => Promise<void>;
   verify: VerifyIdentity;
 }
 
@@ -33,6 +35,18 @@ function isEnrichmentRequest(body: unknown): body is { type: "enrich" } {
     "type" in body &&
     body.type === "enrich"
   );
+}
+
+/** Queue durability is independent of the Sprite's wake-up availability. */
+async function wakeAfterCommit(onCreated?: () => Promise<void>) {
+  if (!onCreated) {
+    return;
+  }
+  try {
+    await onCreated();
+  } catch {
+    console.warn("pstudio_sprite_wake_failed_after_enqueued_job");
+  }
 }
 
 export function createJobEnqueueRoutes(deps: EnqueueDependencies) {
@@ -76,6 +90,9 @@ export function createJobEnqueueRoutes(deps: EnqueueDependencies) {
       if (result.kind === "conflict") {
         return c.json({ error: "conflict" }, 409);
       }
+      // Outbox is authoritative even if the remote Sprite is unavailable.
+      // Never issue a wake until after JWT, live tenant membership and commit.
+      await wakeAfterCommit(deps.onCreated);
       return c.json({ jobId: result.jobId, state: "queued" }, 202);
     } catch {
       return c.json({ error: "temporarily_unavailable" }, 503);
