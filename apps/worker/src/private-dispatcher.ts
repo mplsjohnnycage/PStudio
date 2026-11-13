@@ -16,7 +16,11 @@ if (runtime.RIVET_PRIVATE_DISPATCHER_ENABLED !== "1") {
   throw new Error("Private outbox dispatcher must be explicitly enabled");
 }
 const db = createDb({ DATABASE_URL: runtime.DATABASE_URL });
-const client = createClient<typeof registry>(runtime.RIVET_ENDPOINT);
+const client = createClient<typeof registry>({
+  endpoint: runtime.RIVET_ENDPOINT,
+  namespace: runtime.RIVET_NAMESPACE ?? "default",
+  token: runtime.RIVET_TOKEN ?? "",
+});
 const transport = createPostgresOutboxTransport(
   db,
   createRivetSubmitPublisher(client)

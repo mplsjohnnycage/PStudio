@@ -64,3 +64,8 @@ temp
 
 # Compiled Neon Functions (do not commit)
 apps/server/dist-neon/
+
+# Optional locally installed Rivet agent skills (not runtime code)
+.agents/
+.claude/
+skills-lock.json

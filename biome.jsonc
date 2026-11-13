@@ -1,7 +1,12 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "includes": ["!packages/db/src/migrations/meta"]
+    "includes": [
+      "!packages/db/src/migrations/meta",
+      "!.agents",
+      "!.claude",
+      "!skills-lock.json"
+    ]
   },
   "extends": [
     "ultracite/biome/core",

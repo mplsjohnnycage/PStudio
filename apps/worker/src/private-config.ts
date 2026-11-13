@@ -16,10 +16,13 @@ export function privateRivetConfigured(
     if (endpoint.protocol !== "https:") {
       return false;
     }
+    const serverToken = (s: string) =>
+      s.startsWith("sk_") ||
+      (endpoint.hostname.endsWith(".onrivet.dev") && s.startsWith("admin_"));
     const embeddedSecret =
-      endpoint.username.length > 0 && endpoint.password.startsWith("sk_");
+      endpoint.username.length > 0 && serverToken(endpoint.password);
     const separateSecret =
-      (env.RIVET_TOKEN ?? "").startsWith("sk_") && Boolean(env.RIVET_NAMESPACE);
+      serverToken(env.RIVET_TOKEN ?? "") && Boolean(env.RIVET_NAMESPACE);
     return embeddedSecret || separateSecret;
   } catch {
     return false;
