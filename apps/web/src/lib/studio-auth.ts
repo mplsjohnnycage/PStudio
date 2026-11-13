@@ -1,5 +1,5 @@
 "use client";
-import { createInternalNeonAuth } from "@neon/auth";
+import { createInternalNeonAuth, type ReactBetterAuthClient } from "@neon/auth";
 import { BetterAuthReactAdapter } from "@neon/auth/react/adapters";
 
 export const authConfigured = Boolean(
@@ -14,10 +14,12 @@ const neon = authConfigured
 
 const client = neon?.adapter ?? null;
 
-export function getAuthClient() {
+export function getAuthClient(): ReactBetterAuthClient {
   if (!client) {
     throw new Error("Neon authentication is not configured.");
   }
-  return client;
+  // The Neon adapter installs emailOTPClient(), but createInternalNeonAuth
+  // currently erases that plugin-specific client type.
+  return client as ReactBetterAuthClient;
 }
 export const getApiToken = () => neon?.getJWTToken() ?? Promise.resolve(null);

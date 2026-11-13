@@ -7,7 +7,8 @@
     "check-types": "tsc -b ../../packages/api && tsc --noEmit",
     "dev": "next dev --port 3001",
     "env:generate": "varlock codegen",
-    "start": "next start"
+    "start": "next start",
+    "test": "node --import tsx --test tests/*.test.mjs"
   },
   "dependencies": {
     "@neon/auth": "0.8.2",

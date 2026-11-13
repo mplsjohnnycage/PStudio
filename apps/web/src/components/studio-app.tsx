@@ -132,10 +132,9 @@ async function studioApi<T>(path: string, options?: RequestInit): Promise<T> {
 function Login({ onAuthenticated }: { onAuthenticated: () => Promise<void> }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [register, setRegister] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!authConfigured) {
@@ -145,25 +144,25 @@ function Login({ onAuthenticated }: { onAuthenticated: () => Promise<void> }) {
     setBusy(true);
     setError(null);
     try {
-      const result = register
-        ? await getAuthClient().signUp.email({ email, name, password })
-        : await getAuthClient().signIn.email({ email, password });
-      if (result.error) {
-        setError(result.error.message ?? "Authentication was rejected.");
-      } else if (register) {
-        setError(
-          "Account created. Confirm your email if required, then sign in."
-        );
-        setRegister(false);
-      } else {
-        await onAuthenticated();
+      const client = getAuthClient();
+      const response = await client.signIn.email({ email, password });
+      if (response.error) {
+        setError(response.error.message ?? "Authentication was rejected.");
+        return;
       }
+      const session = await client.getSession();
+      if (!session.data?.user) {
+        setError("Complete email verification, then sign in again.");
+        return;
+      }
+      await onAuthenticated();
     } catch {
       setError("Authentication service is unreachable.");
     } finally {
       setBusy(false);
     }
   }
+
   return (
     <main className="studio-auth-page">
       <div className="studio-auth-visual">
@@ -203,28 +202,16 @@ function Login({ onAuthenticated }: { onAuthenticated: () => Promise<void> }) {
             <LockKeyhole size={23} />
           </div>
           <p className="studio-eyebrow">SECURE WORKSPACE</p>
-          <h2>{register ? "Create your account" : "Welcome back"}</h2>
+          <h2>Welcome back</h2>
           <p className="studio-auth-caption">
-            Sign in with your Neon Auth identity. Workspace permissions are
-            verified for every request.
+            Sign in with your verified Neon Auth identity. Workspace permissions
+            are checked for every request.
           </p>
-          {register ? (
-            <label>
-              Display name
-              <input
-                minLength={2}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
-                required
-                value={name}
-              />
-            </label>
-          ) : null}
           <label>
             Email address
             <input
               autoComplete="email"
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(event) => setEmail(event.target.value)}
               placeholder="you@company.com"
               required
               type="email"
@@ -234,10 +221,9 @@ function Login({ onAuthenticated }: { onAuthenticated: () => Promise<void> }) {
           <label>
             Password
             <input
-              autoComplete={register ? "new-password" : "current-password"}
+              autoComplete="current-password"
               minLength={8}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
+              onChange={(event) => setPassword(event.target.value)}
               required
               type="password"
               value={password}
@@ -254,21 +240,12 @@ function Login({ onAuthenticated }: { onAuthenticated: () => Promise<void> }) {
             type="submit"
           >
             {busy ? <LoaderCircle className="spin" size={17} /> : null}
-            {register ? "Create account" : "Sign in to Studio"}
+            Sign in to Studio
             <ArrowRight size={17} />
           </button>
-          <button
-            className="studio-auth-switch"
-            onClick={() => {
-              setRegister((x) => !x);
-              setError(null);
-            }}
-            type="button"
-          >
-            {register
-              ? "Already have an account? Sign in"
-              : "Need access? Create an account"}
-          </button>
+          <a className="studio-auth-switch" href="/auth/sign-up">
+            Need access? Create an account
+          </a>
           <div className="studio-auth-note">
             <Shield size={15} />{" "}
             {authConfigured
