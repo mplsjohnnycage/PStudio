@@ -10,7 +10,8 @@
     "start": "tsx src/index.ts",
     "start:dispatcher": "tsx src/private-dispatcher.ts",
     "test": "vitest run tests/unit --no-file-parallelism --maxWorkers=1",
-    "test:integration": "node scripts/run-integration.mjs"
+    "test:integration": "node scripts/run-integration.mjs",
+    "test:staging-neon": "node scripts/run-staging-neon.mjs"
   },
   "dependencies": {
     "@earendil-works/chord": "^1.5.2",
@@ -29,6 +30,7 @@
   "devDependencies": {
     "@prospect-studio/config": "*",
     "@types/node": "^26.4.1",
+    "drizzle-orm": "^0.45.4",
     "tsx": "^4.23.13",
     "typescript": "^6.0.3",
     "vitest": "5.1.0"
