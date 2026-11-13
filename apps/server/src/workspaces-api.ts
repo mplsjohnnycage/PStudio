@@ -12,7 +12,11 @@ export interface WorkspacesDependencies {
   create: (
     userId: string,
     name: string
-  ) => Promise<{ kind: "created"; id: string } | { kind: "limit_reached" }>;
+  ) => Promise<
+    | { kind: "created"; id: string }
+    | { kind: "limit_reached" }
+    | { kind: "invite_only" }
+  >;
   list: (userId: string) => Promise<readonly WorkspaceSummary[]>;
   verify: VerifyIdentity;
 }
@@ -58,6 +62,9 @@ export function createWorkspacesRoutes(deps: WorkspacesDependencies) {
     }
     try {
       const result = await deps.create(userId, valid.data.name);
+      if (result.kind === "invite_only") {
+        return c.json({ error: "invite_only" }, 403);
+      }
       return result.kind === "created"
         ? c.json(
             { name: valid.data.name, role: "owner", workspaceId: result.id },

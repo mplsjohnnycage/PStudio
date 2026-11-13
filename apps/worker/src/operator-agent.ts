@@ -10,13 +10,22 @@ import {
   operatorTools,
 } from "@prospect-studio/api/operator-tools";
 import { createDb, type Database } from "@prospect-studio/db";
-import { bindAgentSession } from "@prospect-studio/db/agent-session-queries";
+import {
+  agentSessionId,
+  bindAgentSession,
+  readAgentSession,
+} from "@prospect-studio/db/agent-session-queries";
+import { mayDiscoverInWorkspace } from "@prospect-studio/db/workspace-queries";
 import { pi } from "@rivet-dev/pi";
 import type { Registry } from "rivetkit";
 import { z } from "zod";
 import { agentIdentityDoc } from "./agent-identity";
 import type { credentials } from "./chatgpt-credentials";
 import { executeBoundOperatorCommand } from "./operator-execution";
+import {
+  operatorSandboxEnabled,
+  runIsolatedJavascript,
+} from "./operator-sandbox";
 
 let database: Database | null = null;
 function requireAgentDatabase(): Database {
@@ -78,6 +87,76 @@ export const operatorAgentTools = operatorTools.map((spec) => {
   });
 });
 
+/** Additional private tool available only to explicitly enabled workers.
+ * This is intentionally NOT a public workspace route or arbitrary shell.
+ */
+const isolatedExecutionTools = operatorSandboxEnabled()
+  ? [
+      defineTool({
+        description:
+          "Run generated JavaScript in an ephemeral network-denied agentOS VM for validation. No host files, credentials, publishing, network or persistence.",
+        execute: async (input, api, context) => {
+          const parsed = z
+            .strictObject({ source: z.string().min(1).max(20_000) })
+            .safeParse(input);
+          if (!parsed.success) {
+            return {
+              output: [
+                { text: '{"error":"invalid_input"}', type: "text" as const },
+              ],
+            };
+          }
+          try {
+            const identity = await api.snapshot(agentIdentityDoc, context);
+            if (!(identity?.userId && identity.workspaceId)) {
+              throw new Error("Missing bound agent identity");
+            }
+            const db = requireAgentDatabase();
+            const session = await readAgentSession(
+              db,
+              agentSessionId(identity.userId, identity.workspaceId)
+            );
+            if (
+              !session ||
+              session.userId !== identity.userId ||
+              session.workspaceId !== identity.workspaceId ||
+              !(await mayDiscoverInWorkspace(
+                db,
+                identity.userId,
+                identity.workspaceId
+              ))
+            ) {
+              return {
+                output: [
+                  { text: '{"error":"not_authorized"}', type: "text" as const },
+                ],
+              };
+            }
+            const result = await runIsolatedJavascript(parsed.data.source);
+            return {
+              output: [{ text: JSON.stringify(result), type: "text" as const }],
+            };
+          } catch {
+            return {
+              output: [
+                {
+                  text: '{"error":"isolated_execution_unavailable"}',
+                  type: "text" as const,
+                },
+              ],
+            };
+          }
+        },
+        name: "validate_isolated_javascript",
+        parameters: z.toJSONSchema(
+          z.strictObject({ source: z.string().min(1).max(20_000) }),
+          { target: "draft-07" }
+        ),
+        replay: "unsafe",
+      }),
+    ]
+  : [];
+
 const extensions = createRegistry();
 extensions.install(
   defineExtension({
@@ -95,7 +174,7 @@ extensions.install(
         ].join("\n")
       ),
     ],
-    tools: operatorAgentTools,
+    tools: [...operatorAgentTools, ...isolatedExecutionTools],
   })
 );
 

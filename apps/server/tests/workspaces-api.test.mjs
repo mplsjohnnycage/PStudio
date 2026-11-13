@@ -70,3 +70,18 @@ test("workspace creation uses verified identity and permits no role/id injection
   });
   assert.deepEqual(seen, [["verified-user", "Pilot"]]);
 });
+
+test("invite-only staging rejects workspace creation even for authenticated users", async () => {
+  const app = createWorkspacesRoutes({
+    create: () => Promise.resolve({ kind: "invite_only" }),
+    list: () => Promise.resolve([]),
+    verify: () => Promise.resolve("verified-user"),
+  });
+  const response = await app.request("https://staging.invalid/workspaces", {
+    body: JSON.stringify({ name: "Public registration bypass attempt" }),
+    headers: auth,
+    method: "POST",
+  });
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { error: "invite_only" });
+});

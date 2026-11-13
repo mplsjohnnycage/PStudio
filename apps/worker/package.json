@@ -10,7 +10,7 @@
     "start": "tsx src/index.ts",
     "start:dispatcher": "tsx src/private-dispatcher.ts",
     "test": "vitest run tests/unit --no-file-parallelism --maxWorkers=1",
-    "test:integration": "vitest run tests/integration --no-file-parallelism --maxWorkers=1"
+    "test:integration": "node scripts/run-integration.mjs"
   },
   "dependencies": {
     "@earendil-works/chord": "^1.5.2",
@@ -20,6 +20,7 @@
     "@earendil-works/pi-schema": "^1.5.2",
     "@prospect-studio/api": "*",
     "@prospect-studio/db": "*",
+    "@rivet-dev/agentos-core": "^0.4.8",
     "@rivet-dev/pi": "^0.5.6",
     "@rivet-dev/workflows": "1.1.1",
     "rivetkit": "3.1.1",

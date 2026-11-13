@@ -4,6 +4,7 @@
 import { LockKeyhole, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
+import { requiresFreshLogin } from "@/lib/oauth-query";
 import { getAuthClient } from "@/lib/studio-auth";
 import { hasAuthorizationQuery, resumeAuthorization } from "@/lib/studio-oauth";
 
@@ -18,7 +19,10 @@ export default function OAuthSignInPage() {
     setSignUpUrl(`/auth/sign-up${window.location.search}`);
     let stopped = false;
     const resume = async () => {
-      if (!hasAuthorizationQuery()) {
+      if (
+        !hasAuthorizationQuery() ||
+        requiresFreshLogin(window.location.search)
+      ) {
         return;
       }
       const session = await getAuthClient().getSession();
@@ -69,6 +73,23 @@ export default function OAuthSignInPage() {
       setPending(false);
     }
   };
+  const signInWithGoogle = async () => {
+    setPending(true);
+    setError("");
+    try {
+      const result = await getAuthClient().signIn.social({
+        callbackURL: window.location.href,
+        provider: "google",
+      });
+      if (result.error) {
+        setError(result.error.message ?? "Google sign-in rejected.");
+      }
+    } catch {
+      setError("Google sign-in is not available.");
+    } finally {
+      setPending(false);
+    }
+  };
   return (
     <main className="studio-oauth-page">
       <section className="studio-oauth-card">
@@ -113,7 +134,22 @@ export default function OAuthSignInPage() {
             {pending ? "Signing in..." : "Continue securely"}
           </button>
         </form>
-        <a href={signUpUrl}>Need an account? Create one</a>
+        <button
+          className="studio-oauth-google"
+          disabled={pending}
+          onClick={signInWithGoogle}
+          type="button"
+        >
+          Continue with Google
+        </button>
+        {process.env.NEXT_PUBLIC_STAGING_INVITE_ONLY === "1" ? (
+          <small>
+            Staging access is invite-only. Workspace access is granted
+            separately.
+          </small>
+        ) : (
+          <a href={signUpUrl}>Need an account? Create one</a>
+        )}
         <small>
           <ShieldCheck size={14} /> Workspace access is checked on every tool
           call.

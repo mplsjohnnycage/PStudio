@@ -1744,3 +1744,9 @@
     font-size: 25px;
   }
 }
+
+.studio-oauth-card button.studio-oauth-google {
+  color: #254450;
+  background: #f9fbfc;
+  border: 1px solid #d4e0e4;
+}

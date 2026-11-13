@@ -1,5 +1,6 @@
 "use client";
 
+import { isOAuthVisit } from "./oauth-query";
 import { getAuthClient } from "./studio-auth";
 
 interface OAuthResponse {
@@ -33,8 +34,7 @@ export function hasAuthorizationQuery(): boolean {
   if (typeof window === "undefined") {
     return false;
   }
-  const query = new URLSearchParams(window.location.search);
-  return query.has("client_id") && query.has("response_type");
+  return isOAuthVisit(window.location.search);
 }
 
 /** Never continue an unprompted authorization flow. */

@@ -34,6 +34,7 @@ import { mountOperatorApi } from "./operator-api";
 import { createOperatorMcpRoutes } from "./operator-mcp";
 import { createPreviewsRoutes } from "./previews-api";
 import { createProspectsRoutes } from "./prospects-api";
+import { mountPublicStagingUi } from "./public-staging-ui";
 import { createReviewRoutes } from "./review-api";
 import { createPrivateAgentBroker } from "./rivet-agent-client";
 import { createWorkspacesRoutes } from "./workspaces-api";
@@ -42,8 +43,10 @@ export interface NeonFunctionConfiguration {
   authBaseUrl?: string;
   corsOrigins?: string[];
   databaseUrl?: string;
+  inviteOnly?: boolean;
   jwksUrl?: string;
   mcpResource?: string;
+  publicStagingUi?: boolean;
 }
 
 /**
@@ -111,7 +114,10 @@ export function createNeonApi(config: NeonFunctionConfiguration) {
   app.route(
     "/v1",
     createWorkspacesRoutes({
-      create: (userId, name) => createOwnedWorkspace(db, userId, name),
+      create: (userId, name) =>
+        config.inviteOnly
+          ? Promise.resolve({ kind: "invite_only" as const })
+          : createOwnedWorkspace(db, userId, name),
       list: (userId) => listUserWorkspaces(db, userId),
       verify,
     })
@@ -185,6 +191,9 @@ export function createNeonApi(config: NeonFunctionConfiguration) {
       resource: config.mcpResource,
     })
   );
+  if (config.publicStagingUi) {
+    mountPublicStagingUi(app, undefined, config.inviteOnly);
+  }
   return app;
 }
 
@@ -197,6 +206,8 @@ export default createNeonApi({
   authBaseUrl: process.env.NEON_AUTH_BASE_URL,
   corsOrigins: runtimeOrigins,
   databaseUrl: process.env.DATABASE_URL,
+  inviteOnly: process.env.PSTUDIO_STAGING_INVITE_ONLY === "1",
   jwksUrl: process.env.NEON_AUTH_JWKS_URL,
   mcpResource: process.env.MCP_RESOURCE,
+  publicStagingUi: process.env.PSTUDIO_STAGING_PUBLIC_UI === "1",
 });
