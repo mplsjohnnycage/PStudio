@@ -46,6 +46,8 @@ export interface NeonFunctionConfiguration {
   inviteOnly?: boolean;
   jwksUrl?: string;
   mcpResource?: string;
+  /** Optional server-only Sprite wake hook (not enabled on Neon Functions). */
+  onJobEnqueued?: () => Promise<void>;
   publicStagingUi?: boolean;
 }
 
@@ -144,6 +146,7 @@ export function createNeonApi(config: NeonFunctionConfiguration) {
     createJobEnqueueRoutes({
       enqueue: (userId, workspaceId, prospectId, key) =>
         enqueueWorkspaceJob(db, userId, workspaceId, prospectId, key),
+      onCreated: config.onJobEnqueued,
       verify,
     })
   );

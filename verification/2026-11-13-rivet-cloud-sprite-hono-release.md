@@ -71,3 +71,7 @@ The dedicated Rivet Cloud Sprite Service was restarted with numeric `RIVET_NODE_
 4. **Availability:** We verified Rivet node Service restart and actor state readback. We have not tested full Sprite sleep/wake after a machine failure, interrupted in-flight job replay, or high availability; this single-user setup intentionally accepts a single Sprite.
 
 Official references: https://rivet.dev/docs/versions/ , https://rivet.dev/docs/nodes/ , https://rivet.dev/docs/actors/ , https://vercel.com/docs/frameworks/backend/hono .
+
+## On-demand Sprite wake after authenticated enqueue
+
+The Vercel Hono backend now passes the same fixed `wakeProspectStudioSprite` callback to the shared Neon-backed job-enqueue router. Its wake is invoked only **after** a verified Neon JWT subject, valid workspace/prospect and idempotency key, live database membership check, and completed transactional job/outbox insert. The SDK executes only the fixed `true` probe on `prospect-studio-foundation`, never a caller-specified command. SDK HTTP timeout is eight seconds. A wake failure is logged without exposing credentials; the HTTP response remains 202/queued because the durable Neon outbox is authoritative. The legacy Neon Function receives no wake callback. Focused unit tests prove no wake for unauthorized or unknown membership, wake after commit on success, and no secret leakage or lost job response when wake fails. Real authenticated owner-triggered wake through the deployed Vercel Hono function still requires a real Neon Auth session and is explicitly unverified.

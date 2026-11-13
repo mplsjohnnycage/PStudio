@@ -88,3 +88,59 @@ test("enqueue hides unknown membership and avoids leaking database exceptions", 
     false
   );
 });
+
+test("enqueued job wakes Sprite only after success and keeps accepted job if wake fails", async () => {
+  const order = [];
+  const app = createJobEnqueueRoutes({
+    enqueue: () => {
+      order.push("committed");
+      return Promise.resolve({ jobId: "job-durable", kind: "created" });
+    },
+    onCreated: () => {
+      order.push("woken");
+      return Promise.resolve();
+    },
+    verify: (header) =>
+      Promise.resolve(header === "Bearer valid" ? "member-1" : null),
+  });
+  const response = await request(app);
+  assert.equal(response.status, 202);
+  assert.equal((await response.json()).jobId, "job-durable");
+  assert.deepEqual(order, ["committed", "woken"]);
+  assert.equal(
+    (await request(app, { headers: { Authorization: "" } })).status,
+    401
+  );
+  assert.deepEqual(order, ["committed", "woken"]);
+
+  let failuresWoken = 0;
+  const failedWake = createJobEnqueueRoutes({
+    enqueue: () => Promise.resolve({ jobId: "job-durable", kind: "created" }),
+    onCreated: () => {
+      failuresWoken += 1;
+      return Promise.reject(
+        new Error("secret Sprite credential must not leak")
+      );
+    },
+    verify: () => Promise.resolve("member-1"),
+  });
+  const accepted = await request(failedWake);
+  assert.equal(accepted.status, 202);
+  assert.equal(failuresWoken, 1);
+  assert.equal(
+    (await accepted.text()).includes("secret Sprite credential"),
+    false
+  );
+
+  let deniedWoken = 0;
+  const missing = createJobEnqueueRoutes({
+    enqueue: () => Promise.resolve({ kind: "not_found" }),
+    onCreated: () => {
+      deniedWoken += 1;
+      return Promise.resolve();
+    },
+    verify: () => Promise.resolve("member-1"),
+  });
+  assert.equal((await request(missing)).status, 404);
+  assert.equal(deniedWoken, 0);
+});

@@ -26,6 +26,7 @@ app.route(
     inviteOnly: process.env.PSTUDIO_STAGING_INVITE_ONLY === "1",
     jwksUrl: process.env.NEON_AUTH_JWKS_URL,
     mcpResource: process.env.MCP_RESOURCE,
+    onJobEnqueued: wakeProspectStudioSprite,
     publicStagingUi: false,
   })
 );

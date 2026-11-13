@@ -62,7 +62,7 @@ export async function wakeProspectStudioSprite(): Promise<void> {
     throw new Error("Sprite SDK credential not provisioned");
   }
   const { SpritesClient } = await import("@fly/sprites");
-  const client = new SpritesClient(token);
+  const client = new SpritesClient(token, { timeout: 8000 });
   const sprite = client.sprite("prospect-studio-foundation");
   const result = await sprite.exec("true");
   if (typeof result.exitCode === "number" && result.exitCode !== 0) {
