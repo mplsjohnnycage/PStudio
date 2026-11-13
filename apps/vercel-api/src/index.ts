@@ -1,5 +1,6 @@
 import { createDb } from "@prospect-studio/db";
 import { mayDiscoverInWorkspace } from "@prospect-studio/db/workspace-queries";
+import { Hono } from "hono";
 import { createNeonTokenVerifier } from "../../server/src/auth";
 import { createNeonApi } from "../../server/src/neon-api";
 import {
@@ -13,15 +14,19 @@ const corsOrigins = (process.env.CORS_ORIGIN ?? "")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-const app = createNeonApi({
-  authBaseUrl: process.env.NEON_AUTH_BASE_URL,
-  corsOrigins,
-  databaseUrl: process.env.DATABASE_URL,
-  inviteOnly: process.env.PSTUDIO_STAGING_INVITE_ONLY === "1",
-  jwksUrl: process.env.NEON_AUTH_JWKS_URL,
-  mcpResource: process.env.MCP_RESOURCE,
-  publicStagingUi: false,
-});
+const app = new Hono();
+app.route(
+  "/",
+  createNeonApi({
+    authBaseUrl: process.env.NEON_AUTH_BASE_URL,
+    corsOrigins,
+    databaseUrl: process.env.DATABASE_URL,
+    inviteOnly: process.env.PSTUDIO_STAGING_INVITE_ONLY === "1",
+    jwksUrl: process.env.NEON_AUTH_JWKS_URL,
+    mcpResource: process.env.MCP_RESOURCE,
+    publicStagingUi: false,
+  })
+);
 
 if (
   process.env.DATABASE_URL &&
