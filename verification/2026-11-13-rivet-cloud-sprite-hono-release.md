@@ -41,3 +41,9 @@ An opt-in test using `apps/worker/tests/integration/staging-remote-rivet.e2e.tes
 - Rivet pool SDK: https://rivet.dev/docs/pool-configuration/
 - Hono on Vercel: https://hono.dev/docs/getting-started/vercel
 - Sprites JS SDK: https://github.com/superfly/sprites-js
+
+## Vercel Hono monorepo packaging correction
+
+First deploy (pre-fix) failed because the Hono framework preset requires a *direct* `hono` import at `src/index.ts`. Second deploy compiled but returned `FUNCTION_INVOCATION_FAILED`: Node runtime tried to load an unshipped internal workspace dependency (`/var/task/node_modules/@prospect-studio/db/src/index.ts`). The preset transpiles, but does not bundle linked monorepo TypeScript packages.
+
+Fix: `src/backend.ts` is the single canonical Hono implementation and `tsdown` bundles all TS workspaces and runtime dependencies into generated `src/backend.mjs` and sibling chunks. The Vercel Hono entrypoint `src/index.ts` explicitly imports `hono` and the generated bundle. The generated bundles are excluded from Git and Biome but included in the Vercel build output; a fresh-checkout TS declaration `backend.d.mts` permits typechecking before the bundle exists. `npm run build -w @prospect-studio/vercel-api` generates and imports the real bundle as a required build-time smoke check. Local bundled request with real staging Neon: `/health` 200, unauthenticated wake route 401, correct origin CORS OPTIONS 204. Live Vercel rollout still separately requires verification; never infer deployment success from this local proof.

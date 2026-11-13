@@ -1,52 +1,7 @@
-import { createDb } from "@prospect-studio/db";
-import { mayDiscoverInWorkspace } from "@prospect-studio/db/workspace-queries";
 import { Hono } from "hono";
-import { createNeonTokenVerifier } from "../../server/src/auth";
-import { createNeonApi } from "../../server/src/neon-api";
-import {
-  createSpriteActionRoutes,
-  wakeProspectStudioSprite,
-} from "./sprite-action";
+import backend from "./backend.mjs";
 
-/** Vercel Hono function, separate from the long-running Rivet Sprite worker. */
-const corsOrigins = (process.env.CORS_ORIGIN ?? "")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
+/** Vercel's Hono entrypoint imports one self-contained Node bundle. */
 const app = new Hono();
-app.route(
-  "/",
-  createNeonApi({
-    authBaseUrl: process.env.NEON_AUTH_BASE_URL,
-    corsOrigins,
-    databaseUrl: process.env.DATABASE_URL,
-    inviteOnly: process.env.PSTUDIO_STAGING_INVITE_ONLY === "1",
-    jwksUrl: process.env.NEON_AUTH_JWKS_URL,
-    mcpResource: process.env.MCP_RESOURCE,
-    publicStagingUi: false,
-  })
-);
-
-if (
-  process.env.DATABASE_URL &&
-  process.env.NEON_AUTH_BASE_URL &&
-  process.env.NEON_AUTH_JWKS_URL
-) {
-  const db = createDb({ DATABASE_URL: process.env.DATABASE_URL });
-  const verify = createNeonTokenVerifier({
-    issuer: process.env.NEON_AUTH_BASE_URL,
-    jwksUrl: process.env.NEON_AUTH_JWKS_URL,
-  });
-  app.route(
-    "/v1",
-    createSpriteActionRoutes({
-      authorize: (userId, workspaceId) =>
-        mayDiscoverInWorkspace(db, userId, workspaceId),
-      verify,
-      wake: wakeProspectStudioSprite,
-    })
-  );
-}
-
+app.route("/", backend);
 export default app;
