@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@fly/sprites": "0.2.4",
+    "@orpc/server": "^1.15.6",
     "@prospect-studio/api": "*",
     "@prospect-studio/db": "*",
     "hono": "^4.13.7",

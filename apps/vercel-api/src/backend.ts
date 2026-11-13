@@ -1,3 +1,5 @@
+import { RPCHandler } from "@orpc/server/fetch";
+import { appRouter } from "@prospect-studio/api/routers/index";
 import { createDb } from "@prospect-studio/db";
 import { mayDiscoverInWorkspace } from "@prospect-studio/db/workspace-queries";
 import { Hono } from "hono";
@@ -37,6 +39,19 @@ if (
   const verify = createNeonTokenVerifier({
     issuer: process.env.NEON_AUTH_BASE_URL,
     jwksUrl: process.env.NEON_AUTH_JWKS_URL,
+  });
+  // Preserve the existing oRPC healthCheck endpoint used by Next.js.
+  // All procedures still run through the same typed application router.
+  const rpcHandler = new RPCHandler(appRouter);
+  app.use("/rpc/*", async (c, next) => {
+    const result = await rpcHandler.handle(c.req.raw, {
+      context: { db },
+      prefix: "/rpc",
+    });
+    if (result.matched) {
+      return c.newResponse(result.response.body, result.response);
+    }
+    await next();
   });
   app.route(
     "/v1",
