@@ -9,6 +9,8 @@ import {
   type SourceCandidate,
 } from "@prospect-studio/db/admission-queries";
 import { enqueueWorkspaceJob } from "@prospect-studio/db/job-enqueue";
+import { createNeonTokenVerifier } from "../../server/src/auth";
+import { resolveVerifiedDiscoveryOperator } from "./overture-operator";
 
 interface Place {
   address?: string;
@@ -234,26 +236,39 @@ if (process.argv[1]?.endsWith("/overture-batch.ts")) {
   const { env } = process;
   if (
     env.OVERTURE_DISCOVERY_ENABLED !== "1" ||
-    !env.DATABASE_URL ||
+    env.PSTUDIO_STAGING_ONLY !== "1" ||
+    !env.DATABASE_URL?.includes("pstudio_staging_worker_20261113") ||
     !env.DISCOVERY_WORKSPACE_ID ||
-    !env.DISCOVERY_OPERATOR_USER_ID
+    !env.DISCOVERY_OPERATOR_TOKEN_FILE ||
+    env.DISCOVERY_OPERATOR_USER_ID
   ) {
-    throw new Error("Private operator-run discovery is not configured");
+    throw new Error("Private verified staging discovery is not configured");
   }
-  runBatch({
-    bbox: env.DISCOVERY_BBOX ?? "",
-    category: env.DISCOVERY_CATEGORY ?? "%plumb%",
-    db: createDb({ DATABASE_URL: env.DATABASE_URL }),
-    limit: Number(env.DISCOVERY_LIMIT ?? "25"),
-    python: env.DISCOVERY_PYTHON,
-    userId: env.DISCOVERY_OPERATOR_USER_ID,
-    workspaceId: env.DISCOVERY_WORKSPACE_ID,
+  const verify = createNeonTokenVerifier({
+    issuer: env.NEON_AUTH_BASE_URL,
+    jwksUrl: env.NEON_AUTH_JWKS_URL,
+  });
+  resolveVerifiedDiscoveryOperator({
+    stagingOnly: true,
+    tokenFile: env.DISCOVERY_OPERATOR_TOKEN_FILE,
+    verify,
   })
+    .then((userId) =>
+      runBatch({
+        bbox: env.DISCOVERY_BBOX ?? "",
+        category: env.DISCOVERY_CATEGORY ?? "%plumb%",
+        db: createDb({ DATABASE_URL: env.DATABASE_URL as string }),
+        limit: Number(env.DISCOVERY_LIMIT ?? "25"),
+        python: env.DISCOVERY_PYTHON,
+        userId,
+        workspaceId: env.DISCOVERY_WORKSPACE_ID as string,
+      })
+    )
     .then((x) =>
       console.log(JSON.stringify({ event: "neon_discovery_outbox", ...x }))
     )
     .catch(() => {
-      console.error("Discovery batch failed");
+      console.error("Verified staging discovery batch failed");
       process.exitCode = 1;
     });
 }
