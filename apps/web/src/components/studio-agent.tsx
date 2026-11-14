@@ -32,6 +32,7 @@ interface Event {
 interface Status {
   available: boolean;
   chatgptConnected: boolean;
+  planEnabled: boolean;
   reason?: string;
 }
 interface Message {
@@ -41,8 +42,10 @@ interface Message {
 }
 interface Props {
   onNavigate: (view: View) => void;
+  onOpenChange: (open: boolean) => void;
   onRefresh: () => Promise<void>;
   onSelectProspect: (id: string) => void;
+  open: boolean;
   request: <T>(path: string, options?: RequestInit) => Promise<T>;
   workspaceId: string;
 }
@@ -50,11 +53,12 @@ interface Props {
 export function StudioAgent({
   workspaceId,
   request,
+  open,
+  onOpenChange,
   onNavigate,
   onSelectProspect,
   onRefresh,
 }: Props) {
-  const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
   const [busy, setBusy] = useState(false);
   const [instruction, setInstruction] = useState("");
@@ -75,9 +79,11 @@ export function StudioAgent({
     setCallback("");
     setMessages([]);
     setMovement("");
-    cursor.current = new Date(Date.now() - 5000).toISOString();
+    cursor.current = workspaceId
+      ? new Date(Date.now() - 5000).toISOString()
+      : new Date(0).toISOString();
     seen.current = new Set();
-  }, []);
+  }, [workspaceId]);
   useEffect(() => {
     if (open && workspaceId) {
       void check().catch(() => setError("Cannot read agent status."));
@@ -226,7 +232,7 @@ export function StudioAgent({
         aria-expanded={open}
         className="studio-agent-launch"
         disabled={!workspaceId}
-        onClick={() => setOpen((x) => !x)}
+        onClick={() => onOpenChange(!open)}
         type="button"
       >
         <Sparkles size={17} />
@@ -257,7 +263,7 @@ export function StudioAgent({
             </div>
             <button
               aria-label="Close agent"
-              onClick={() => setOpen(false)}
+              onClick={() => onOpenChange(false)}
               type="button"
             >
               <X size={18} />
@@ -287,7 +293,20 @@ export function StudioAgent({
               <small>{status.reason ?? "Private runtime unavailable"}</small>
             </div>
           ) : null}
-          {status?.available && !status.chatgptConnected ? (
+          {status?.available && !status.planEnabled ? (
+            <div className="studio-agent-setup">
+              <LockKeyhole size={28} />
+              <h3>ChatGPT plan sign-in not available</h3>
+              <p>
+                Your personal ChatGPT agent requires a verified owner session
+                and a configured private Rivet host. The workspace remains
+                available without a ChatGPT connection.
+              </p>
+            </div>
+          ) : null}
+          {status?.available &&
+          status.planEnabled &&
+          !status.chatgptConnected ? (
             <div className="studio-agent-setup">
               <ShieldCheck size={28} />
               <h3>Connect a ChatGPT model</h3>
@@ -348,6 +367,14 @@ export function StudioAgent({
                 <span>
                   <Activity size={13} /> Live dashboard
                 </span>
+                <span>Using ChatGPT plan</span>
+                <a
+                  href="https://chatgpt.com/settings/usage"
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  Manage usage <ExternalLink size={13} />
+                </a>
               </div>
               <div aria-live="polite" className="studio-agent-messages">
                 {messages.length === 0 ? (

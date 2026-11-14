@@ -9,6 +9,7 @@ import {
   failEnrichmentAttempt,
 } from "@prospect-studio/db/enrichment-queries";
 import { lookupMinneapolisLicense } from "../../server/src/minneapolis-license-source";
+import { lookupAdmittedOverture } from "./overture-source";
 
 export interface EnrichmentStore {
   begin: (jobId: string) => Promise<EnrichmentClaim | null>;
@@ -56,7 +57,11 @@ class SourceFailure extends Error {
 export async function executeEnrichmentWithStore(
   jobId: string,
   store: EnrichmentStore,
-  lookup: LookupPublicRecord
+  lookup: LookupPublicRecord,
+  lookupOverture?: (
+    externalId: string,
+    prospectId: string
+  ) => Promise<SourceCandidate | null>
 ): Promise<EnrichmentOutcome> {
   const claimed = await store.begin(jobId);
   if (!claimed) {
@@ -65,10 +70,16 @@ export async function executeEnrichmentWithStore(
 
   let candidate: SourceCandidate;
   try {
-    if (claimed.provider !== "minneapolis_residential_specialty") {
+    if (
+      claimed.provider !== "minneapolis_residential_specialty" &&
+      claimed.provider !== "overture_places"
+    ) {
       throw new SourceFailure("unsupported_provider");
     }
-    const fetched = await lookup(claimed.externalId);
+    const fetched =
+      claimed.provider === "overture_places"
+        ? await lookupOverture?.(claimed.externalId, claimed.prospectId)
+        : await lookup(claimed.externalId);
     if (!fetched) {
       throw new SourceFailure("source_record_missing");
     }
@@ -116,5 +127,7 @@ export function executeEnrichmentAttempt(
       completeEnrichmentAttempt(db, id, attempt, candidate),
     fail: (id, attempt, code) => failEnrichmentAttempt(db, id, attempt, code),
   };
-  return executeEnrichmentWithStore(jobId, store, lookup);
+  return executeEnrichmentWithStore(jobId, store, lookup, (id, prospectId) =>
+    lookupAdmittedOverture(db, id, prospectId)
+  );
 }

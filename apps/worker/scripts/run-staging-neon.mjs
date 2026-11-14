@@ -9,8 +9,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-if (process.env.PSTUDIO_STAGING_NEON_RIVET_E2E !== "1") {
-  throw new Error("Explicit PSTUDIO_STAGING_NEON_RIVET_E2E=1 is required");
+const overture = process.env.PSTUDIO_STAGING_OVERTURE_RIVET_E2E === "1";
+const legacy = process.env.PSTUDIO_STAGING_NEON_RIVET_E2E === "1";
+if (overture === legacy) {
+  throw new Error("Select exactly one explicit staging integration test mode");
 }
 if (process.env.NODE_ENV === "production") {
   throw new Error("Refusing staging-only integration test in production mode");
@@ -42,7 +44,9 @@ try {
     [
       runner,
       "run",
-      "tests/integration/staging-neon-rivet.e2e.test.ts",
+      overture
+        ? "tests/integration/staging-overture-neon-rivet.e2e.test.ts"
+        : "tests/integration/staging-neon-rivet.e2e.test.ts",
       "--no-file-parallelism",
       "--maxWorkers=1",
     ],
