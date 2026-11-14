@@ -7,6 +7,7 @@ import {
   type EnrichmentCompletion,
   type EnrichmentFailure,
   failEnrichmentAttempt,
+  readCompletedEnrichmentAttempt,
 } from "@prospect-studio/db/enrichment-queries";
 import { lookupMinneapolisLicense } from "../../server/src/minneapolis-license-source";
 import { lookupAdmittedOverture } from "./overture-source";
@@ -23,6 +24,7 @@ export interface EnrichmentStore {
     attempt: number,
     errorCode: string
   ) => Promise<EnrichmentFailure>;
+  readCompletedAttempt: (jobId: string) => Promise<number | null>;
 }
 
 export interface EnrichmentOutcome {
@@ -65,7 +67,10 @@ export async function executeEnrichmentWithStore(
 ): Promise<EnrichmentOutcome> {
   const claimed = await store.begin(jobId);
   if (!claimed) {
-    return { kind: "skipped" };
+    const attempt = await store.readCompletedAttempt(jobId);
+    return attempt === null
+      ? { kind: "skipped" }
+      : { attempt, kind: "already_completed" };
   }
 
   let candidate: SourceCandidate;
@@ -126,6 +131,7 @@ export function executeEnrichmentAttempt(
     complete: (id, attempt, candidate) =>
       completeEnrichmentAttempt(db, id, attempt, candidate),
     fail: (id, attempt, code) => failEnrichmentAttempt(db, id, attempt, code),
+    readCompletedAttempt: (id) => readCompletedEnrichmentAttempt(db, id),
   };
   return executeEnrichmentWithStore(jobId, store, lookup, (id, prospectId) =>
     lookupAdmittedOverture(db, id, prospectId)
