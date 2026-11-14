@@ -167,19 +167,31 @@ export async function readCompletedEnrichmentAttempt(
   jobId: string
 ): Promise<number | null> {
   const [record] = await db
-    .select({ attempt: jobs.attempt, state: jobs.state, type: jobs.type })
+    .select({ attempt: jobs.attempt })
     .from(jobs)
-    .where(eq(jobs.id, jobId))
+    .innerJoin(
+      jobAttempts,
+      and(eq(jobAttempts.jobId, jobs.id), eq(jobAttempts.attempt, jobs.attempt))
+    )
+    .innerJoin(
+      evidence,
+      and(
+        eq(evidence.id, jobAttempts.evidenceId),
+        eq(evidence.prospectId, jobs.prospectId)
+      )
+    )
+    .where(
+      and(
+        eq(jobs.id, jobId),
+        eq(jobs.type, "enrich"),
+        eq(jobs.state, "completed"),
+        eq(jobAttempts.state, "completed")
+      )
+    )
     .limit(1);
-  if (
-    record?.type !== "enrich" ||
-    record.state !== "completed" ||
-    !Number.isInteger(record.attempt) ||
-    record.attempt < 1
-  ) {
-    return null;
-  }
-  return record.attempt;
+  return record && Number.isInteger(record.attempt) && record.attempt > 0
+    ? record.attempt
+    : null;
 }
 
 /**

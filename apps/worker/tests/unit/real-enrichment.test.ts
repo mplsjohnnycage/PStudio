@@ -58,6 +58,49 @@ describe("real enrichment orchestration", () => {
     expect(lookup).not.toHaveBeenCalled();
   });
 
+  test("recognizes a committed attempt when completion response was lost", async () => {
+    const store = fixture();
+    store.complete.mockRejectedValueOnce(new Error("response lost"));
+    store.readCompletedAttempt.mockResolvedValueOnce(1);
+    expect(
+      await executeEnrichmentWithStore("job-a", store, async () => candidate)
+    ).toEqual({
+      attempt: 1,
+      kind: "already_completed",
+    });
+    expect(store.fail).not.toHaveBeenCalled();
+  });
+
+  test("recognizes only its own attempt after a completion conflict", async () => {
+    const store = fixture();
+    store.complete.mockResolvedValueOnce({ kind: "conflict" } as never);
+    store.readCompletedAttempt.mockResolvedValueOnce(1);
+    expect(
+      await executeEnrichmentWithStore("job-a", store, async () => candidate)
+    ).toEqual({
+      attempt: 1,
+      kind: "already_completed",
+    });
+    expect(store.fail).not.toHaveBeenCalled();
+  });
+
+  test("does not mistake another attempt's commit for its own result", async () => {
+    const store = fixture();
+    store.complete.mockRejectedValueOnce(new Error("response lost"));
+    store.readCompletedAttempt.mockResolvedValueOnce(2);
+    const outcome = await executeEnrichmentWithStore(
+      "job-a",
+      store,
+      async () => candidate
+    );
+    expect(outcome).toEqual({
+      attempt: 1,
+      errorCode: "storage_unavailable",
+      kind: "retrying",
+    });
+    expect(store.fail).toHaveBeenCalledWith("job-a", 1, "storage_unavailable");
+  });
+
   test("runs fixed public provider and completes durable records with evidence ids", async () => {
     const store = fixture();
     const lookup = vi.fn(async () => candidate);

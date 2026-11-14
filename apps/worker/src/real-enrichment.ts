@@ -52,6 +52,19 @@ class SourceFailure extends Error {
   }
 }
 
+/** Fail closed when the database is unreachable or the attempt differs. */
+async function hasCommittedCurrentAttempt(
+  store: EnrichmentStore,
+  jobId: string,
+  attempt: number
+): Promise<boolean> {
+  try {
+    return (await store.readCompletedAttempt(jobId)) === attempt;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Exactly one bounded, source-backed enrichment attempt. Raw upstream errors
  * and credentials never enter Neon state; only an allowlisted safe code does.
@@ -112,8 +125,19 @@ export async function executeEnrichmentWithStore(
         kind: "completed",
       };
     }
+    if (
+      completed.kind === "conflict" &&
+      (await hasCommittedCurrentAttempt(store, jobId, claimed.attempt))
+    ) {
+      return { attempt: claimed.attempt, kind: "already_completed" };
+    }
     return { attempt: claimed.attempt, kind: completed.kind };
   } catch {
+    // An upstream response may be lost after the database transaction commits.
+    // The authoritative record, exact attempt and linked evidence must agree.
+    if (await hasCommittedCurrentAttempt(store, jobId, claimed.attempt)) {
+      return { attempt: claimed.attempt, kind: "already_completed" };
+    }
     const code = "storage_unavailable";
     const failed = await store.fail(jobId, claimed.attempt, code);
     return { attempt: claimed.attempt, errorCode: code, kind: failed.kind };

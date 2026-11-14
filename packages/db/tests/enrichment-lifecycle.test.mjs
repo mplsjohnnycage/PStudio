@@ -252,3 +252,17 @@ test("a completed enrichment is detectable after worker restart without re-claim
     await f.engine.close();
   }
 });
+
+test("a synthetic completed job without committed attempt evidence is not accepted", async () => {
+  const f = await fixture();
+  try {
+    assert.equal((await beginEnrichmentAttempt(f.db, f.jobId))?.attempt, 1);
+    await f.db.update(jobs).set({ state: "completed" });
+    assert.equal(await readCompletedEnrichmentAttempt(f.db, f.jobId), null);
+    await f.db.update(jobAttempts).set({ state: "completed" });
+    assert.equal(await readCompletedEnrichmentAttempt(f.db, f.jobId), null);
+    assert.equal((await f.db.select().from(evidence)).length, 0);
+  } finally {
+    await f.engine.close();
+  }
+});

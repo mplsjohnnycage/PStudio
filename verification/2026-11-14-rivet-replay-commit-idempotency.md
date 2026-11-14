@@ -35,3 +35,28 @@ If an enrichment transaction commits in Neon and the Rivet workflow restarts bef
 - The stale `running` attempt reaper and races involving a *different* database attempt are deliberately fail-closed, not automatically reconciled by this change.
 - Real owner Neon sign-in, ChatGPT OAuth consent, first plan-backed Pi Durable inference, and refresh-token rotation require genuine owner interaction and remain unverified.
 - No production release, outreach, published client website, or other consequential operation was performed.
+
+## Follow-up: exact attempt / evidence reconciliation
+
+A separate isolated QA worktree identified two additional replay cases. These
+safeguards were independently reproduced RED and fixed on the canonical PR #13
+branch rather than publishing another competing implementation.
+
+- A manually marked `jobs.state=completed` without a completed attempt and
+  matching source evidence no longer passes replay validation. The query now
+  joins the current attempt and its evidence for the same prospect.
+- A lost `completeEnrichmentAttempt` response or a completion conflict can
+  acknowledge only the exact attempt committed by Neon. Other attempt IDs
+  remain fail-closed. A failed verification read cannot infer success.
+- RED: 1 PGlite DB regression and 2 worker regressions failed as expected.
+- GREEN: PGlite DB tests 6/6; focused worker tests 9/9.
+- Full repository `npm test` rerun: 116 repository + 39 worker + 4 Vercel API
+  + 12 web = **171 tests passing**, zero failed. A prior run had two transient
+  AgentOS VM timeouts under load; isolated AgentOS 7/7 and fresh full rerun pass.
+- `npm run check` pass, 193 files; `npm run check-types` pass, 7/7;
+  `NEXT_PUBLIC_SERVER_URL=https://pstudio-hono-staging-johnnyc.vercel.app npm run build`
+  pass, 6/6. No staging or production services were restarted.
+
+**Separate live in-flight termination/recovery remains an unverified release
+acceptance gate**; these tests prove database-level replay cases, not an actual
+Rivet process crash and resume.
