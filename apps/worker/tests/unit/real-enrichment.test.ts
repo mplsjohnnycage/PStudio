@@ -84,6 +84,33 @@ describe("real enrichment orchestration", () => {
     expect(store.fail).not.toHaveBeenCalled();
   });
 
+  test("preserves an unresolved completion conflict instead of accepting it", async () => {
+    const store = fixture();
+    store.complete.mockResolvedValueOnce({ kind: "conflict" } as never);
+    const lookup = vi.fn(async () => candidate);
+    expect(await executeEnrichmentWithStore("job-a", store, lookup)).toEqual({
+      attempt: 1,
+      kind: "conflict",
+    });
+    expect(store.readCompletedAttempt).toHaveBeenCalledWith("job-a");
+    expect(store.fail).not.toHaveBeenCalled();
+  });
+
+  test("a lost response plus unavailable proof cannot be acknowledged", async () => {
+    const store = fixture();
+    store.complete.mockRejectedValueOnce(new Error("response_lost"));
+    store.readCompletedAttempt.mockRejectedValueOnce(
+      new Error("database_unavailable")
+    );
+    const lookup = vi.fn(async () => candidate);
+    expect(await executeEnrichmentWithStore("job-a", store, lookup)).toEqual({
+      attempt: 1,
+      errorCode: "storage_unavailable",
+      kind: "retrying",
+    });
+    expect(store.fail).toHaveBeenCalledWith("job-a", 1, "storage_unavailable");
+  });
+
   test("does not mistake another attempt's commit for its own result", async () => {
     const store = fixture();
     store.complete.mockRejectedValueOnce(new Error("response lost"));

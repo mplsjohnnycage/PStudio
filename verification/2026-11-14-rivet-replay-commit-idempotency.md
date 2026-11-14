@@ -60,3 +60,25 @@ branch rather than publishing another competing implementation.
 **Separate live in-flight termination/recovery remains an unverified release
 acceptance gate**; these tests prove database-level replay cases, not an actual
 Rivet process crash and resume.
+
+## Final duplicate cleanup and defensive test coverage (2026-11-14 UTC)
+
+Consolidated two further worker regressions on this canonical PR:
+(1) unresolved `complete` conflict must stay `conflict` without committed proof;
+(2) a lost completion response with an unavailable proof lookup cannot be
+acknowledged and retains the safe `storage_unavailable` handling.
+
+Verification against the canonical implementation plus these two tests:
+`npm test` **173/173 pass** (116 repository, 41 worker, 4 Vercel API,
+12 web); `npm run check` pass (193 files); `npm run check-types` **7/7**;
+production-style build **6/6** with the public staging API URL.
+
+The superseded 12-file legacy pilot WIP was safely archived at Git stash
+`e20ee349dbf4b86b9cf0490917924a19f3bac8e7` with a durable Git backup
+reference `backup/pstudio-legacy-wip-20261114`. The original worktree is clean.
+An overlapping independent QA implementation was not merged a second time;
+its committed history remains available. No customer outreach or publication
+occurred. A Sprite lifecycle transition occurred during cleanup, restarting
+services automatically; this was not an intentional deployment or a proof
+of interrupted in-flight recovery. Real owner OAuth and live in-flight crash
+acceptance remain release blockers.
