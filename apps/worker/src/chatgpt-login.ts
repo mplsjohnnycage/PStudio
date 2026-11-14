@@ -4,6 +4,10 @@ import {
   InMemoryCredentialStore,
 } from "@earendil-works/pi-ai";
 import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
+import {
+  allowedChatgptUser,
+  validChatgptHostId,
+} from "@prospect-studio/api/chatgpt-hosted-policy";
 import { actor, type Registry, UserError } from "rivetkit";
 import type { credentials } from "./chatgpt-credentials";
 
@@ -13,8 +17,6 @@ interface PendingSignIn {
   pasteRedirect: (url: string) => void;
 }
 const APP_NAME = "Prospect Studio";
-const HOST_ID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
  * Rivet guide: https://rivet.dev/guides/sign-in-with-chatgpt/
@@ -27,6 +29,9 @@ const HOST_ID_PATTERN =
 export const chatgptLogin = actor({
   actions: {
     finish: async (c, redirectUrl?: string) => {
+      if (!allowedChatgptUser(c.key[0] ?? "")) {
+        throw new UserError("Hosted ChatGPT plan usage is not enabled");
+      }
       const { pending } = c.vars;
       if (!pending) {
         throw new UserError("Start ChatGPT sign-in before finishing");
@@ -54,9 +59,12 @@ export const chatgptLogin = actor({
       }
     },
     start: (c) => {
+      if (!allowedChatgptUser(c.key[0] ?? "")) {
+        throw new UserError("Hosted ChatGPT plan usage is not enabled");
+      }
       c.vars.pending?.cancel();
       const hostId = process.env.CHATGPT_HOST_ID;
-      if (!(hostId && HOST_ID_PATTERN.test(hostId))) {
+      if (!(hostId && validChatgptHostId(hostId))) {
         throw new UserError("ChatGPT host identity is not configured");
       }
       const models = createModels({

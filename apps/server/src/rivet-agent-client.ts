@@ -1,3 +1,4 @@
+import { allowedChatgptUser } from "@prospect-studio/api/chatgpt-hosted-policy";
 import type { AgentBrokerAdapter } from "./agent-broker";
 
 const PUBLIC_TOKEN = /^(pk_|ck_)/;
@@ -77,6 +78,7 @@ export function createPrivateAgentBroker(): AgentBrokerAdapter {
       clientCall(async (client) =>
         client.chatgptLogin.getOrCreate([userId]).start()
       ),
+    planEnabled: (userId: string) => allowedChatgptUser(userId),
     prompt: (userId, workspaceId, text, requestId) =>
       clientCall(async (client) => {
         const result = await client.operatorAgent

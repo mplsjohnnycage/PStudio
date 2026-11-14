@@ -24,6 +24,7 @@ export interface AgentBrokerAdapter {
   connected: (userId: string) => Promise<boolean>;
   loginFinish: (userId: string, redirectUrl: string) => Promise<void>;
   loginStart: (userId: string) => Promise<string>;
+  planEnabled: (userId: string) => boolean;
   prompt: (
     userId: string,
     workspaceId: string,
@@ -110,18 +111,33 @@ export function createAgentRoutes(deps: AgentRoutesDependencies) {
       return c.json({
         available: false,
         chatgptConnected: false,
+        planEnabled: false,
         reason: "private_rivet_not_configured",
       });
+    }
+    if (!deps.broker.planEnabled(c.get("agentUserId"))) {
+      return c.json(
+        {
+          available: true,
+          chatgptConnected: false,
+          planEnabled: false,
+          reason: "hosted_chatgpt_plan_not_enabled",
+        },
+        200,
+        { "Cache-Control": "no-store" }
+      );
     }
     try {
       return c.json({
         available: true,
         chatgptConnected: await deps.broker.connected(c.get("agentUserId")),
+        planEnabled: true,
       });
     } catch {
       return c.json({
         available: false,
         chatgptConnected: false,
+        planEnabled: true,
         reason: "private_rivet_unavailable",
       });
     }
@@ -151,6 +167,12 @@ export function createAgentRoutes(deps: AgentRoutesDependencies) {
   });
 
   app.post("/workspaces/:workspaceId/agent/chatgpt/start", async (c) => {
+    if (
+      deps.broker.available &&
+      !deps.broker.planEnabled(c.get("agentUserId"))
+    ) {
+      return c.json({ error: "hosted_chatgpt_plan_not_enabled" }, 503);
+    }
     if (!deps.broker.available) {
       return c.json({ error: "private_rivet_not_configured" }, 503);
     }
@@ -169,6 +191,12 @@ export function createAgentRoutes(deps: AgentRoutesDependencies) {
   });
 
   app.post("/workspaces/:workspaceId/agent/chatgpt/finish", async (c) => {
+    if (
+      deps.broker.available &&
+      !deps.broker.planEnabled(c.get("agentUserId"))
+    ) {
+      return c.json({ error: "hosted_chatgpt_plan_not_enabled" }, 503);
+    }
     if (!deps.broker.available) {
       return c.json({ error: "private_rivet_not_configured" }, 503);
     }
@@ -185,6 +213,12 @@ export function createAgentRoutes(deps: AgentRoutesDependencies) {
   });
 
   app.post("/workspaces/:workspaceId/agent/prompt", async (c) => {
+    if (
+      deps.broker.available &&
+      !deps.broker.planEnabled(c.get("agentUserId"))
+    ) {
+      return c.json({ error: "hosted_chatgpt_plan_not_enabled" }, 503);
+    }
     if (!deps.broker.available) {
       return c.json({ error: "private_rivet_not_configured" }, 503);
     }

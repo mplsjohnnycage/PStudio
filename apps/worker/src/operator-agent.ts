@@ -5,6 +5,7 @@ import {
   defineTool,
   section,
 } from "@earendil-works/pi-durable";
+import { allowedChatgptUser } from "@prospect-studio/api/chatgpt-hosted-policy";
 import {
   operatorCommandSchema,
   operatorTools,
@@ -187,6 +188,9 @@ extensions.install(
 export const operatorAgent = pi({
   credentials: (c) => {
     const [userId] = c.key;
+    if (!allowedChatgptUser(userId ?? "")) {
+      throw new Error("ChatGPT plan usage is not enabled for this user");
+    }
     if (!userId) {
       throw new Error("Missing agent owner");
     }
