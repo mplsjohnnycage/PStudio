@@ -64,10 +64,15 @@ function validCallback(input: string): boolean {
     const url = new URL(input);
     return (
       url.protocol === "http:" &&
-      ["localhost", "127.0.0.1"].includes(url.hostname) &&
+      url.hostname === "127.0.0.1" &&
+      url.port !== "" &&
+      url.username === "" &&
+      url.password === "" &&
       url.pathname === "/auth/callback" &&
-      url.searchParams.has("code") &&
-      url.searchParams.has("state") &&
+      url.searchParams.getAll("code").length === 1 &&
+      Boolean(url.searchParams.get("code")) &&
+      url.searchParams.getAll("state").length === 1 &&
+      Boolean(url.searchParams.get("state")) &&
       url.hash === ""
     );
   } catch {

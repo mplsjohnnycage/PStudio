@@ -7,7 +7,10 @@ import {
   validChatgptHostId,
 } from "@prospect-studio/api/chatgpt-hosted-policy";
 import { createAgentRoutes } from "../src/agent-broker.ts";
-import { privateAgentConfigured } from "../src/rivet-agent-client.ts";
+import {
+  chatgptCredentialConnected,
+  privateAgentConfigured,
+} from "../src/rivet-agent-client.ts";
 
 const path = "https://api.example.invalid/workspaces/workspace_1/agent";
 function fixture(available = true, planEnabled = true) {
@@ -296,4 +299,79 @@ test("a second authenticated workspace member cannot access personal ChatGPT act
   });
   assert.equal(prompt.status, 503);
   assert.equal(invoked, 0);
+});
+
+test("OpenAI callback only permits exact IPv4 loopback with one non-empty code and state", async () => {
+  const { app, calls } = fixture();
+  const cases = [
+    "http://localhost:1455/auth/callback?code=abc&state=def",
+    "http://127.0.0.1:1455/auth/callback?code=&state=def",
+    "http://127.0.0.1:1455/auth/callback?code=abc&state=",
+    "http://127.0.0.1:1455/auth/callback?code=abc&code=other&state=def",
+    "http://127.0.0.1:1455/auth/callback?code=abc&state=def&state=other",
+    "http://127.0.0.1:1455/auth/callback?code=abc&state=def#bad",
+    "http://127.0.0.1/auth/callback?code=abc&state=def",
+    "http://person@127.0.0.1:1455/auth/callback?code=abc&state=def",
+  ];
+  await Promise.all(
+    cases.map(async (redirectUrl) => {
+      const res = await app.request(`${path}/chatgpt/finish`, {
+        body: JSON.stringify({ redirectUrl }),
+        headers,
+        method: "POST",
+      });
+      assert.equal(res.status, 400, `Rejected ${new URL(redirectUrl).host}`);
+    })
+  );
+  const allowed = await app.request(`${path}/chatgpt/finish`, {
+    body: JSON.stringify({
+      redirectUrl:
+        "http://127.0.0.1:54321/auth/callback?code=abc&state=def&client_id=test",
+    }),
+    headers,
+    method: "POST",
+  });
+  assert.equal(allowed.status, 200);
+  assert.deepEqual(
+    calls.map((c) => c[0]),
+    ["finish"]
+  );
+});
+
+test("status checks fresh OAuth credential, not merely a cached provider listing", async () => {
+  const future = Date.now() + 30 * 60_000;
+  const refresh = async () => ({
+    access: "fake-test-access-token",
+    expires: future,
+    type: "oauth",
+  });
+  assert.equal(await chatgptCredentialConnected({ refresh }), true);
+  assert.equal(
+    await chatgptCredentialConnected({ refresh: async () => undefined }),
+    false
+  );
+  assert.equal(
+    await chatgptCredentialConnected({
+      refresh: async () => ({ access: "", expires: future, type: "oauth" }),
+    }),
+    false
+  );
+  assert.equal(
+    await chatgptCredentialConnected({
+      refresh: async () => ({
+        access: "test",
+        expires: Date.now() - 1000,
+        type: "oauth",
+      }),
+    }),
+    false
+  );
+  assert.equal(
+    await chatgptCredentialConnected({
+      refresh: async () => {
+        throw new Error("revoked");
+      },
+    }),
+    false
+  );
 });

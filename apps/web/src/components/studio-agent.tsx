@@ -295,9 +295,9 @@ export function StudioAgent({
               <LockKeyhole size={28} />
               <h3>ChatGPT plan sign-in not available</h3>
               <p>
-                This hosted deployment requires explicit provider approval and a
-                configured agent host identity before connecting a ChatGPT
-                subscription. The workspace remains available.
+                Your personal ChatGPT agent requires a verified owner session
+                and a configured private Rivet host. The workspace remains
+                available without a ChatGPT connection.
               </p>
             </div>
           ) : null}
