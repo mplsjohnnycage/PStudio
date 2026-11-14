@@ -4,6 +4,7 @@ import {
   Activity,
   ArrowRight,
   BadgeCheck,
+  Bot,
   Building2,
   CalendarDays,
   ChevronDown,
@@ -36,9 +37,14 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { authConfigured, getApiToken, getAuthClient } from "@/lib/studio-auth";
+import {
+  selectAccessibleWorkspace,
+  workspaceCreationAllowed,
+} from "@/lib/workspace-selection";
 import { StudioAgent } from "./studio-agent";
 import { StudioMap } from "./studio-map";
 
@@ -102,6 +108,9 @@ interface Review {
 }
 
 const serverConfigured = Boolean(process.env.NEXT_PUBLIC_SERVER_URL);
+const canCreateWorkspace = workspaceCreationAllowed(
+  process.env.NEXT_PUBLIC_STAGING_INVITE_ONLY
+);
 const apiOrigin = process.env.NEXT_PUBLIC_SERVER_URL?.replace(/\/$/, "") ?? "";
 
 async function studioApi<T>(path: string, options?: RequestInit): Promise<T> {
@@ -139,9 +148,11 @@ async function studioApi<T>(path: string, options?: RequestInit): Promise<T> {
               ? "The service is unavailable. Check the server and database connection."
               : code === "limit_reached"
                 ? "Workspace limit reached."
-                : code === "invalid_input"
-                  ? "Review your inputs and try again."
-                  : code
+                : code === "invite_only"
+                  ? "This deployment is invite-only. Sign in with an existing workspace owner account."
+                  : code === "invalid_input"
+                    ? "Review your inputs and try again."
+                    : code
     );
   }
   return value as T;
@@ -295,6 +306,12 @@ export function StudioApp() {
       .finally(() => setIsPending(false));
   }, [reloadSession]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [workspaceLoadState, setWorkspaceLoadState] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
+  const [loadedWorkspaceUserId, setLoadedWorkspaceUserId] = useState("");
+  const [agentOpen, setAgentOpen] = useState(false);
+  const lastAgentWorkspace = useRef("");
   const [workspaceId, setWorkspaceId] = useState("");
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -336,14 +353,58 @@ export function StudioApp() {
   const [mobileMeasuresOpen, setMobileMeasuresOpen] = useState(false);
 
   const refreshWorkspaces = useCallback(async () => {
-    const result = await studioApi<{ workspaces: Workspace[] }>("/workspaces");
-    setWorkspaces(result.workspaces);
-    setWorkspaceId((prev) =>
-      result.workspaces.some((w) => w.id === prev)
-        ? prev
-        : (result.workspaces.at(0)?.id ?? "")
-    );
-  }, []);
+    setWorkspaceLoadState("loading");
+    try {
+      const result = await studioApi<{ workspaces: Workspace[] }>(
+        "/workspaces"
+      );
+      // A persisted workspace is a preference, not an authorization grant.
+      let remembered = "";
+      const userId = session?.user?.id;
+      if (userId) {
+        try {
+          remembered =
+            localStorage.getItem(`pstudio:workspace:${userId}`) ?? "";
+        } catch {
+          // Private browsing may disable storage; the server list still wins.
+        }
+      }
+      setWorkspaces(result.workspaces);
+      setWorkspaceId((previous) =>
+        selectAccessibleWorkspace(result.workspaces, previous, remembered)
+      );
+      setLoadedWorkspaceUserId(userId ?? "");
+      setWorkspaceLoadState("ready");
+      setError(null);
+    } catch (cause) {
+      setWorkspaceLoadState("error");
+      throw cause;
+    }
+  }, [session?.user?.id]);
+
+  // Remember the last verified selection for this signed-in owner only.
+  useEffect(() => {
+    if (
+      !(workspaceId && session?.user?.id) ||
+      loadedWorkspaceUserId !== session.user.id ||
+      !workspaces.some((workspace) => workspace.id === workspaceId)
+    ) {
+      return;
+    }
+    try {
+      localStorage.setItem(`pstudio:workspace:${session.user.id}`, workspaceId);
+    } catch {
+      // Storage is optional, never a prerequisite for a working workspace.
+    }
+  }, [workspaceId, session?.user?.id, loadedWorkspaceUserId, workspaces]);
+
+  useEffect(() => {
+    if (lastAgentWorkspace.current !== workspaceId) {
+      lastAgentWorkspace.current = workspaceId;
+      setAgentOpen(false);
+    }
+  }, [workspaceId]);
+
   const refresh = useCallback(async (ws: string) => {
     if (!ws) {
       setProspects([]);
@@ -364,6 +425,8 @@ export function StudioApp() {
     if (!session?.user?.id) {
       setWorkspaces([]);
       setWorkspaceId("");
+      setLoadedWorkspaceUserId("");
+      setWorkspaceLoadState("loading");
       setProspects([]);
       setJobs([]);
       return;
@@ -535,6 +598,12 @@ export function StudioApp() {
   }
   async function createWorkspace(e: FormEvent) {
     e.preventDefault();
+    if (!canCreateWorkspace) {
+      setError(
+        "This deployment is invite-only. Use an existing workspace account."
+      );
+      return;
+    }
     await action(
       "workspace",
       () =>
@@ -841,8 +910,10 @@ export function StudioApp() {
           {isOperator && workspaceId ? (
             <StudioAgent
               onNavigate={setView}
+              onOpenChange={setAgentOpen}
               onRefresh={() => refresh(workspaceId)}
               onSelectProspect={setSelected}
+              open={agentOpen}
               request={studioApi}
               workspaceId={workspaceId}
             />
@@ -895,7 +966,15 @@ export function StudioApp() {
             onChange={(e) => setWorkspaceId(e.target.value)}
             value={workspaceId}
           >
-            <option value="">Select a workspace</option>
+            <option value="">
+              {workspaceLoadState === "loading"
+                ? "Loading workspaces..."
+                : workspaceLoadState === "error"
+                  ? "Workspace load failed"
+                  : workspaces.length === 0
+                    ? "No workspaces assigned"
+                    : "Select a workspace"}
+            </option>
             {workspaces.map((w) => (
               <option key={w.id} value={w.id}>
                 {w.name} · {w.role}
@@ -904,17 +983,77 @@ export function StudioApp() {
           </select>
           <ChevronDown size={14} />
         </div>
-        <button
-          className="studio-text-button"
-          onClick={() => setShowWorkspaceCreate(true)}
-          type="button"
-        >
-          <Plus size={14} /> New workspace
-        </button>
+        {canCreateWorkspace ? (
+          <button
+            className="studio-text-button"
+            onClick={() => setShowWorkspaceCreate(true)}
+            type="button"
+          >
+            <Plus size={14} /> New workspace
+          </button>
+        ) : (
+          <span className="studio-workspace-invite">
+            <Shield size={14} /> Invite-only
+          </span>
+        )}
         <span className="studio-workspace-cap">
           <Shield size={14} /> Workspace-scoped access
         </span>
       </div>
+      {!workspaceId && session?.user?.id ? (
+        <section
+          aria-label="Workspace availability"
+          aria-live="polite"
+          className="studio-workspace-state"
+        >
+          <div>
+            <strong>
+              {workspaceLoadState === "loading"
+                ? "Loading your workspaces"
+                : workspaceLoadState === "error"
+                  ? "Unable to load workspaces"
+                  : "No workspace is available for this account"}
+            </strong>
+            <p>
+              {workspaceLoadState === "loading"
+                ? "Checking workspace access before opening your prospects and agent."
+                : workspaceLoadState === "error"
+                  ? "The workspace service did not respond. Retry without signing out."
+                  : canCreateWorkspace
+                    ? "If you already have a workspace, use its owner account. Otherwise, create a private workspace to begin."
+                    : "This staging deployment is invite-only. Sign in with the owner account that already has workspace access."}
+            </p>
+          </div>
+          {workspaceLoadState === "error" ||
+          (workspaceLoadState === "ready" && !canCreateWorkspace) ? (
+            <button
+              className="studio-btn-secondary"
+              onClick={() =>
+                void refreshWorkspaces().catch((cause) =>
+                  setError(
+                    cause instanceof Error
+                      ? cause.message
+                      : "Workspace service unavailable"
+                  )
+                )
+              }
+              type="button"
+            >
+              <RefreshCcw size={15} />
+              {workspaceLoadState === "error" ? "Retry" : "Recheck access"}
+            </button>
+          ) : null}
+          {workspaceLoadState === "ready" && canCreateWorkspace ? (
+            <button
+              className="studio-btn-primary"
+              onClick={() => setShowWorkspaceCreate(true)}
+              type="button"
+            >
+              <Plus size={15} /> New workspace
+            </button>
+          ) : null}
+        </section>
+      ) : null}
       {error ? (
         <div className="studio-banner studio-banner-error" role="alert">
           <CircleHelp size={17} />
@@ -1846,6 +1985,22 @@ export function StudioApp() {
           <PanelsTopLeft size={20} />
           Studio
         </button>
+        <button
+          aria-expanded={agentOpen}
+          aria-label="Agent"
+          className={agentOpen ? "active" : ""}
+          disabled={!(isOperator && workspaceId)}
+          onClick={() => setAgentOpen((opened) => !opened)}
+          title={
+            isOperator
+              ? "Open Prospect Operator"
+              : "Select an owner or operator workspace first"
+          }
+          type="button"
+        >
+          <Bot size={20} />
+          Agent
+        </button>
       </nav>
       <footer className="studio-bottom">
         <span>
@@ -1857,7 +2012,7 @@ export function StudioApp() {
         </span>
         <span>PROSPECT STUDIO / 2026</span>
       </footer>
-      {showWorkspaceCreate ? (
+      {showWorkspaceCreate && canCreateWorkspace ? (
         <div className="studio-modal-backdrop" role="presentation">
           <form className="studio-modal" onSubmit={createWorkspace}>
             <button

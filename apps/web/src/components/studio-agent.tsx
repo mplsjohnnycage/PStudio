@@ -42,8 +42,10 @@ interface Message {
 }
 interface Props {
   onNavigate: (view: View) => void;
+  onOpenChange: (open: boolean) => void;
   onRefresh: () => Promise<void>;
   onSelectProspect: (id: string) => void;
+  open: boolean;
   request: <T>(path: string, options?: RequestInit) => Promise<T>;
   workspaceId: string;
 }
@@ -51,11 +53,12 @@ interface Props {
 export function StudioAgent({
   workspaceId,
   request,
+  open,
+  onOpenChange,
   onNavigate,
   onSelectProspect,
   onRefresh,
 }: Props) {
-  const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
   const [busy, setBusy] = useState(false);
   const [instruction, setInstruction] = useState("");
@@ -229,7 +232,7 @@ export function StudioAgent({
         aria-expanded={open}
         className="studio-agent-launch"
         disabled={!workspaceId}
-        onClick={() => setOpen((x) => !x)}
+        onClick={() => onOpenChange(!open)}
         type="button"
       >
         <Sparkles size={17} />
@@ -260,7 +263,7 @@ export function StudioAgent({
             </div>
             <button
               aria-label="Close agent"
-              onClick={() => setOpen(false)}
+              onClick={() => onOpenChange(false)}
               type="button"
             >
               <X size={18} />

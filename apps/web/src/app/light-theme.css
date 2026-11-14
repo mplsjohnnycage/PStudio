@@ -595,7 +595,7 @@
 }
 .studio-shell .prototype-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 13px;
   max-width: 1050px;
   margin-bottom: 20px;
@@ -1058,7 +1058,7 @@
     left: max(13px, env(safe-area-inset-left));
     z-index: 35;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     width: auto;
     height: 62px;
     padding: 5px 7px;
@@ -1749,4 +1749,55 @@
   color: #254450;
   background: #f9fbfc;
   border: 1px solid #d4e0e4;
+}
+
+/* Mobile agent entry is discoverable before workspace authorization. */
+.studio-shell .prototype-mobile-nav button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+/* Visible loading, retry, and first-run states instead of an unexplained map. */
+.studio-shell .studio-workspace-state {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 23px;
+  color: #25483f;
+  background: #f2f8f6;
+  border-bottom: 1px solid #d9e9e3;
+}
+.studio-shell .studio-workspace-state strong {
+  font-size: 13px;
+}
+.studio-shell .studio-workspace-state p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #53736a;
+}
+.studio-shell .studio-workspace-state button {
+  flex: 0 0 auto;
+}
+@media (max-width: 740px) {
+  .studio-shell .studio-workspace-state {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 15px;
+  }
+  .studio-shell .studio-workspace-state button {
+    min-height: 34px;
+  }
+}
+
+.studio-shell .studio-workspace-invite {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 650;
+  color: #617f72;
+  white-space: nowrap;
 }
