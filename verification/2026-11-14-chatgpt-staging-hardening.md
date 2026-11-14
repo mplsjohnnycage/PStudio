@@ -27,3 +27,7 @@
 ## Acceptance still missing
 
 The real owner must sign into the Vercel-protected UI, complete Neon Auth and the ChatGPT-plan consent flow, save the callback *inside the PStudio UI*, run an actual Pi Durable model request and verify a successful response and later token refresh. Do not mark OAuth end-to-end or production readiness as passing until those steps actually occur. Preserve PR as draft until product-wide production release gates are satisfied.
+
+## Runtime dependency audit follow-up
+
+A fresh `npm audit --omit=dev --json` on the staging code initially found 6 production-tree advisories (4 moderate, 2 low), all from the `shadcn` scaffolding CLI (and its dependency tree) incorrectly declared under `packages/ui` runtime `dependencies`. No application source imports the `shadcn` CLI; it is build/development tooling rather than a production library. Moved `shadcn` into `packages/ui` `devDependencies` and regenerated the workspace package lock. A second `npm audit --omit=dev --json` returned **0 production dependency advisories** (0 critical/high/moderate/low). This does not imply that dev-tooling advisories are resolved or that unknown vulnerabilities do not exist. Full repo lint, type tests, unit tests, and build were rerun after reclassification; the code and lockfile remain subject to CI verification and deployment.
