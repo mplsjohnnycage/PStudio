@@ -3,6 +3,8 @@ import { test } from "node:test";
 import { createAgentMailRoutes } from "../src/agentmail-api.ts";
 import { createAgentMailClient } from "../src/agentmail-client.ts";
 
+const INBOX_MISMATCH = /agentmail_inbox_mismatch/;
+
 const url = "https://test.invalid/workspaces/ws-owner/agentmail";
 const headers = { Authorization: "Bearer signed" };
 const makeApp = (overrides = {}) => {
@@ -202,4 +204,71 @@ test("AgentMail client uses server-only bearer credential and never sends invite
   assert.equal(eventBody.metadata.workspace_id, "ws-owner");
   assert.equal(eventBody.metadata.prospect_id, "p1");
   assert.equal(JSON.stringify(threads).includes("server-secret"), false);
+});
+
+test("AgentMail full-thread retrieval uses the provider's global route and confirms inbox ownership", async () => {
+  const calls = [];
+  const client = createAgentMailClient({
+    apiKey: "server-secret",
+    fetchImpl: (targetUrl) => {
+      calls.push(String(targetUrl));
+      return Promise.resolve({
+        json: async () => ({
+          inbox_id: "pstudio@agentmail.to",
+          messages: [
+            {
+              from: "Client <client@example.com>",
+              message_id: "msg-1",
+              text: "Confirmed",
+              timestamp: "2026-11-14T16:00:00Z",
+            },
+          ],
+          thread_id: "thread-1",
+        }),
+        ok: true,
+      });
+    },
+    inboxId: "pstudio@agentmail.to",
+  });
+  const messages = await client.getThread("thread-1");
+  assert.deepEqual(calls, [
+    "https://api.agentmail.to/v0/threads/thread-1?limit=50",
+  ]);
+  assert.equal(messages[0].text, "Confirmed");
+});
+
+test("AgentMail must not display a thread belonging to another inbox", async () => {
+  const client = createAgentMailClient({
+    apiKey: "server-secret",
+    fetchImpl: async () => ({
+      json: async () => ({
+        inbox_id: "other-private@agentmail.to",
+        messages: [
+          {
+            from: "Private",
+            message_id: "msg-private",
+            text: "private content",
+          },
+        ],
+        thread_id: "thread-foreign",
+      }),
+      ok: true,
+    }),
+    inboxId: "pstudio@agentmail.to",
+  });
+  await assert.rejects(client.getThread("thread-foreign"), INBOX_MISMATCH);
+});
+
+test("AgentMail must not accept a thread result without inbox attribution", async () => {
+  const client = createAgentMailClient({
+    apiKey: "server-secret",
+    fetchImpl: async () => ({
+      json: async () => ({
+        messages: [{ message_id: "m1", text: "unattributed" }],
+      }),
+      ok: true,
+    }),
+    inboxId: "pstudio@agentmail.to",
+  });
+  await assert.rejects(client.getThread("thread-1"), INBOX_MISMATCH);
 });

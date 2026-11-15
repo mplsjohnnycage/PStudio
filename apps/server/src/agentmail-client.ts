@@ -49,13 +49,17 @@ export function createAgentMailClient({
   inboxId,
   fetchImpl = fetch,
 }: AgentMailOptions): AgentMailClient {
-  const root = `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(inboxId)}`;
+  const apiRoot = "https://api.agentmail.to/v0";
+  const root = `${apiRoot}/inboxes/${encodeURIComponent(inboxId)}`;
   async function request<T>(
     path: string,
     method = "GET",
-    body?: unknown
+    body?: unknown,
+    scope: "inbox" | "global" = "inbox"
   ): Promise<T> {
-    const response = await fetchImpl(`${root}${path}`, {
+    const endpoint =
+      scope === "global" ? `${apiRoot}${path}` : `${root}${path}`;
+    const response = await fetchImpl(endpoint, {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
@@ -108,9 +112,19 @@ export function createAgentMailClient({
       }));
     },
     async getThread(threadId) {
-      const result = await request<{ messages?: Record<string, unknown>[] }>(
-        `/threads/${encodeURIComponent(threadId)}?limit=50`
+      const result = await request<{
+        inbox_id?: string;
+        messages?: Record<string, unknown>[];
+      }>(
+        `/threads/${encodeURIComponent(threadId)}?limit=50`,
+        "GET",
+        undefined,
+        "global"
       );
+      // Thread IDs are global resources. Never return another inbox's messages.
+      if (result.inbox_id !== inboxId) {
+        throw new Error("agentmail_inbox_mismatch");
+      }
       return (result.messages ?? []).map((item) => ({
         from: String(item.from ?? "Unknown sender").slice(0, 250),
         messageId: String(item.message_id ?? ""),

@@ -40,3 +40,29 @@
 - `NEXT_PUBLIC_SERVER_URL=https://pstudio-hono-staging-johnnyc.vercel.app npm run build` **6/6 successful**, with 7/7 Next.js static pages generated.
 - First test run had an unrelated 5-second AgentOS VM startup timeout; isolated AgentOS 7/7 and full rerun then passed. Source code for AgentOS was not changed.
 - Browser/mobile pixel inspection of the new authenticated frontend was **not** completed; CSS and server-side rendering checks do not prove screenshot parity.
+
+## Independent pull-request review — 2026-11-14
+
+PR #14 code review identified a functional and privacy bug: the existing full-thread
+request used the undocumented `/v0/inboxes/{inbox}/threads/{thread_id}` route.
+The AgentMail API documents `GET /v0/threads/{thread_id}`; thread IDs resolve
+as global resources, so matching the returned `inbox_id` to the configured
+PStudio inbox is mandatory before returning any message content.
+
+The client now uses the documented route, and **fails closed** on foreign or
+missing inbox attribution. Three new regression tests were verified RED against
+the original implementation and GREEN after repair (proper route, foreign
+inbox rejection, missing attribution rejection). The existing server-side
+credential and no-invitation contracts are preserved.
+
+Verification of the corrected source:
+- `npm run check`: pass, 201 files.
+- `npm run check-types`: pass, 7/7 tasks.
+- `npm test`: pass, **187/187 tests** (125 repository Node, 41 worker, 4 Vercel API, 17 web).
+- `NEXT_PUBLIC_SERVER_URL=https://pstudio-hono-staging-johnnyc.vercel.app npm run build`: pass, 6/6 tasks.
+- `git diff --check`: pass.
+- Official route: https://docs.agentmail.to/api-reference/threads/get
+
+PR remains draft: live mailbox capacity, actual owner authorization and the
+provider round trip are not complete. A merge must not be confused with the
+production deployment gate.
