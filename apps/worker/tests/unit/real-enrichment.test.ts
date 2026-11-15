@@ -1,3 +1,4 @@
+import type { EnrichmentClaim } from "@prospect-studio/db/enrichment-queries";
 import { describe, expect, test, vi } from "vitest";
 import { executeEnrichmentWithStore } from "../../src/real-enrichment";
 
@@ -13,22 +14,120 @@ const candidate = {
     "https://services.arcgis.com/afSMGVsC7QlRK1kZ/arcgis/rest/services/Residential_Specialty/FeatureServer/0/query",
 };
 const fixture = () => ({
-  begin: vi.fn(async () => ({
-    attempt: 1,
-    externalId: "TLIC22572",
-    jobId: "job-a",
-    prospectId: "prospect-a",
-    provider: "minneapolis_residential_specialty",
-  })),
+  begin: vi.fn(
+    async (): Promise<EnrichmentClaim | null> => ({
+      attempt: 1,
+      externalId: "TLIC22572",
+      jobId: "job-a",
+      prospectId: "prospect-a",
+      provider: "minneapolis_residential_specialty",
+    })
+  ),
   complete: vi.fn(async () => ({
     claimIds: ["claim-a"],
     evidenceIds: ["evidence-a"],
     kind: "completed" as const,
   })),
   fail: vi.fn(async () => ({ kind: "retrying" as const })),
+  readCompletedAttempt: vi.fn(async (): Promise<number | null> => null),
 });
 
 describe("real enrichment orchestration", () => {
+  test("acknowledges a previous committed attempt after an actor replay", async () => {
+    const store = fixture();
+    store.begin.mockResolvedValueOnce(null);
+    store.readCompletedAttempt.mockResolvedValueOnce(1);
+    const lookup = vi.fn(async () => candidate);
+    expect(await executeEnrichmentWithStore("job-a", store, lookup)).toEqual({
+      attempt: 1,
+      kind: "already_completed",
+    });
+    expect(store.readCompletedAttempt).toHaveBeenCalledWith("job-a");
+    expect(lookup).not.toHaveBeenCalled();
+    expect(store.complete).not.toHaveBeenCalled();
+    expect(store.fail).not.toHaveBeenCalled();
+  });
+
+  test("does not mistake a competing worker's unclaimed job for completed", async () => {
+    const store = fixture();
+    store.begin.mockResolvedValueOnce(null);
+    const lookup = vi.fn(async () => candidate);
+    expect(await executeEnrichmentWithStore("job-a", store, lookup)).toEqual({
+      kind: "skipped",
+    });
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  test("recognizes a committed attempt when completion response was lost", async () => {
+    const store = fixture();
+    store.complete.mockRejectedValueOnce(new Error("response lost"));
+    store.readCompletedAttempt.mockResolvedValueOnce(1);
+    expect(
+      await executeEnrichmentWithStore("job-a", store, async () => candidate)
+    ).toEqual({
+      attempt: 1,
+      kind: "already_completed",
+    });
+    expect(store.fail).not.toHaveBeenCalled();
+  });
+
+  test("recognizes only its own attempt after a completion conflict", async () => {
+    const store = fixture();
+    store.complete.mockResolvedValueOnce({ kind: "conflict" } as never);
+    store.readCompletedAttempt.mockResolvedValueOnce(1);
+    expect(
+      await executeEnrichmentWithStore("job-a", store, async () => candidate)
+    ).toEqual({
+      attempt: 1,
+      kind: "already_completed",
+    });
+    expect(store.fail).not.toHaveBeenCalled();
+  });
+
+  test("preserves an unresolved completion conflict instead of accepting it", async () => {
+    const store = fixture();
+    store.complete.mockResolvedValueOnce({ kind: "conflict" } as never);
+    const lookup = vi.fn(async () => candidate);
+    expect(await executeEnrichmentWithStore("job-a", store, lookup)).toEqual({
+      attempt: 1,
+      kind: "conflict",
+    });
+    expect(store.readCompletedAttempt).toHaveBeenCalledWith("job-a");
+    expect(store.fail).not.toHaveBeenCalled();
+  });
+
+  test("a lost response plus unavailable proof cannot be acknowledged", async () => {
+    const store = fixture();
+    store.complete.mockRejectedValueOnce(new Error("response_lost"));
+    store.readCompletedAttempt.mockRejectedValueOnce(
+      new Error("database_unavailable")
+    );
+    const lookup = vi.fn(async () => candidate);
+    expect(await executeEnrichmentWithStore("job-a", store, lookup)).toEqual({
+      attempt: 1,
+      errorCode: "storage_unavailable",
+      kind: "retrying",
+    });
+    expect(store.fail).toHaveBeenCalledWith("job-a", 1, "storage_unavailable");
+  });
+
+  test("does not mistake another attempt's commit for its own result", async () => {
+    const store = fixture();
+    store.complete.mockRejectedValueOnce(new Error("response lost"));
+    store.readCompletedAttempt.mockResolvedValueOnce(2);
+    const outcome = await executeEnrichmentWithStore(
+      "job-a",
+      store,
+      async () => candidate
+    );
+    expect(outcome).toEqual({
+      attempt: 1,
+      errorCode: "storage_unavailable",
+      kind: "retrying",
+    });
+    expect(store.fail).toHaveBeenCalledWith("job-a", 1, "storage_unavailable");
+  });
+
   test("runs fixed public provider and completes durable records with evidence ids", async () => {
     const store = fixture();
     const lookup = vi.fn(async () => candidate);

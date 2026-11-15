@@ -55,6 +55,7 @@ describe("Overture-to-Neon intake contracts", () => {
         kind: "completed" as const,
       })),
       fail: vi.fn(async () => ({ kind: "retrying" as const })),
+      readCompletedAttempt: vi.fn(async () => null),
     };
     const lookupLicense = vi.fn(async () => null);
     const lookupOverture = vi.fn(async () => asSource(place));

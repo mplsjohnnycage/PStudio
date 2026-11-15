@@ -158,6 +158,43 @@ export function beginEnrichmentAttempt(
 }
 
 /**
+ * A durable actor can replay after the transaction committed but before its
+ * execution step was checkpointed. Only a genuinely completed enrichment is
+ * safe to acknowledge. An unclaimed running/retrying job is never success.
+ */
+export async function readCompletedEnrichmentAttempt(
+  db: Database,
+  jobId: string
+): Promise<number | null> {
+  const [record] = await db
+    .select({ attempt: jobs.attempt })
+    .from(jobs)
+    .innerJoin(
+      jobAttempts,
+      and(eq(jobAttempts.jobId, jobs.id), eq(jobAttempts.attempt, jobs.attempt))
+    )
+    .innerJoin(
+      evidence,
+      and(
+        eq(evidence.id, jobAttempts.evidenceId),
+        eq(evidence.prospectId, jobs.prospectId)
+      )
+    )
+    .where(
+      and(
+        eq(jobs.id, jobId),
+        eq(jobs.type, "enrich"),
+        eq(jobs.state, "completed"),
+        eq(jobAttempts.state, "completed")
+      )
+    )
+    .limit(1);
+  return record && Number.isInteger(record.attempt) && record.attempt > 0
+    ? record.attempt
+    : null;
+}
+
+/**
  * Evidence, provenance links, business claims, job completion and attempt
  * completion commit in one transaction. External source data stays "reported".
  */

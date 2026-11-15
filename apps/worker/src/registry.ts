@@ -82,6 +82,11 @@ export const jobGate = workflow({
             "Enrichment cannot proceed without a durable job claim"
           );
         }
+        // A recovered DB commit is only valid for this actor's own attempt.
+        // Do not mark attempt N complete using another worker's result N+1.
+        if (outcome.attempt !== running.attempt) {
+          throw new Error("Enrichment result attempt differs from Rivet state");
+        }
         const updated = await loopCtx.step(
           "finish-enrichment-".concat(String(index)),
           (step) => {

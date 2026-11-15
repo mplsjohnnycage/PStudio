@@ -7,6 +7,7 @@ import {
   type EnrichmentCompletion,
   type EnrichmentFailure,
   failEnrichmentAttempt,
+  readCompletedEnrichmentAttempt,
 } from "@prospect-studio/db/enrichment-queries";
 import { lookupMinneapolisLicense } from "../../server/src/minneapolis-license-source";
 import { lookupAdmittedOverture } from "./overture-source";
@@ -23,6 +24,7 @@ export interface EnrichmentStore {
     attempt: number,
     errorCode: string
   ) => Promise<EnrichmentFailure>;
+  readCompletedAttempt: (jobId: string) => Promise<number | null>;
 }
 
 export interface EnrichmentOutcome {
@@ -50,6 +52,19 @@ class SourceFailure extends Error {
   }
 }
 
+/** Fail closed when the database is unreachable or the attempt differs. */
+async function hasCommittedCurrentAttempt(
+  store: EnrichmentStore,
+  jobId: string,
+  attempt: number
+): Promise<boolean> {
+  try {
+    return (await store.readCompletedAttempt(jobId)) === attempt;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Exactly one bounded, source-backed enrichment attempt. Raw upstream errors
  * and credentials never enter Neon state; only an allowlisted safe code does.
@@ -65,7 +80,10 @@ export async function executeEnrichmentWithStore(
 ): Promise<EnrichmentOutcome> {
   const claimed = await store.begin(jobId);
   if (!claimed) {
-    return { kind: "skipped" };
+    const attempt = await store.readCompletedAttempt(jobId);
+    return attempt === null
+      ? { kind: "skipped" }
+      : { attempt, kind: "already_completed" };
   }
 
   let candidate: SourceCandidate;
@@ -107,8 +125,19 @@ export async function executeEnrichmentWithStore(
         kind: "completed",
       };
     }
+    if (
+      completed.kind === "conflict" &&
+      (await hasCommittedCurrentAttempt(store, jobId, claimed.attempt))
+    ) {
+      return { attempt: claimed.attempt, kind: "already_completed" };
+    }
     return { attempt: claimed.attempt, kind: completed.kind };
   } catch {
+    // An upstream response may be lost after the database transaction commits.
+    // The authoritative record, exact attempt and linked evidence must agree.
+    if (await hasCommittedCurrentAttempt(store, jobId, claimed.attempt)) {
+      return { attempt: claimed.attempt, kind: "already_completed" };
+    }
     const code = "storage_unavailable";
     const failed = await store.fail(jobId, claimed.attempt, code);
     return { attempt: claimed.attempt, errorCode: code, kind: failed.kind };
@@ -126,6 +155,7 @@ export function executeEnrichmentAttempt(
     complete: (id, attempt, candidate) =>
       completeEnrichmentAttempt(db, id, attempt, candidate),
     fail: (id, attempt, code) => failEnrichmentAttempt(db, id, attempt, code),
+    readCompletedAttempt: (id) => readCompletedEnrichmentAttempt(db, id),
   };
   return executeEnrichmentWithStore(jobId, store, lookup, (id, prospectId) =>
     lookupAdmittedOverture(db, id, prospectId)
