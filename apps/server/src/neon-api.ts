@@ -26,6 +26,8 @@ import {
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createAgentRoutes } from "./agent-broker";
+import { createAgentMailRoutes } from "./agentmail-api";
+import { createAgentMailClient } from "./agentmail-client";
 import { createNeonTokenVerifier } from "./auth";
 import { createDiscoveryRoutes } from "./discovery-api";
 import { createEvidenceRoutes } from "./evidence-api";
@@ -42,6 +44,9 @@ import { createPrivateAgentBroker } from "./rivet-agent-client";
 import { createWorkspacesRoutes } from "./workspaces-api";
 
 export interface NeonFunctionConfiguration {
+  agentMailApiKey?: string;
+  agentMailInboxId?: string;
+  agentMailWorkspaceId?: string;
   authBaseUrl?: string;
   corsOrigins?: string[];
   databaseUrl?: string;
@@ -144,6 +149,29 @@ export function createNeonApi(config: NeonFunctionConfiguration) {
       verify,
     })
   );
+  // AgentMail is strictly server-only and bound to one explicit workspace.
+  // Missing configuration stays disconnected; never expose another inbox.
+  const agentMailClient =
+    config.agentMailApiKey && config.agentMailInboxId
+      ? createAgentMailClient({
+          apiKey: config.agentMailApiKey,
+          inboxId: config.agentMailInboxId,
+        })
+      : null;
+  app.route(
+    "/v1",
+    createAgentMailRoutes({
+      assignedWorkspaceId: config.agentMailWorkspaceId,
+      authorize: (userId, workspaceId) =>
+        mayDiscoverInWorkspace(db, userId, workspaceId),
+      client: agentMailClient,
+      prospectExists: async (userId, workspaceId, prospectId) => {
+        const rows = await listWorkspaceProspects(db, userId, workspaceId);
+        return rows?.some((row) => row.id === prospectId) ?? false;
+      },
+      verify,
+    })
+  );
   app.route(
     "/v1",
     createJobsRoutes({
@@ -216,6 +244,9 @@ const runtimeOrigins = (process.env.CORS_ORIGIN ?? "")
   .filter(Boolean);
 
 export default createNeonApi({
+  agentMailApiKey: process.env.AGENTMAIL_API_KEY,
+  agentMailInboxId: process.env.PSTUDIO_AGENTMAIL_INBOX_ID,
+  agentMailWorkspaceId: process.env.PSTUDIO_AGENTMAIL_WORKSPACE_ID,
   authBaseUrl: process.env.NEON_AUTH_BASE_URL,
   corsOrigins: runtimeOrigins,
   databaseUrl: process.env.DATABASE_URL,
