@@ -1801,3 +1801,320 @@
   color: #617f72;
   white-space: nowrap;
 }
+
+/* AgentMail Inbox + Calendar: the same operator shell, never a simulated thread feed. */
+.studio-shell .pstudio-communications {
+  min-height: calc(100dvh - 137px);
+  padding: 22px;
+  color: #273e48;
+  background: #f8f9f9;
+}
+.pstudio-comm-heading {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 17px;
+}
+.pstudio-comm-heading h1 {
+  margin: 4px 0;
+  font-size: 27px;
+  font-weight: 750;
+}
+.pstudio-comm-heading p {
+  margin: 0;
+  font-size: 12px;
+  color: #76878f;
+}
+.pstudio-comm-heading button {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 9px 12px;
+}
+.pstudio-comm-counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  max-width: 600px;
+  margin-bottom: 14px;
+}
+.pstudio-comm-counts > div {
+  padding: 12px 15px;
+  font-size: 11px;
+  color: #74858c;
+  background: #fff;
+  border: 1px solid #e1e7e7;
+  border-radius: 11px;
+}
+.pstudio-comm-counts strong {
+  display: block;
+  font-size: 22px;
+  color: #27413d;
+}
+.pstudio-comm-grid {
+  display: grid;
+  grid-template-columns: minmax(250px, 350px) minmax(0, 1fr);
+  min-height: 450px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #e2e7e8;
+  border-radius: 15px;
+}
+.pstudio-comm-list {
+  max-height: calc(100dvh - 300px);
+  overflow: auto;
+  border-right: 1px solid #e2e7e8;
+}
+.pstudio-comm-list input {
+  width: calc(100% - 26px);
+  padding: 10px 12px;
+  margin: 13px;
+  color: #263f48;
+  background: #fafcfc;
+  border: 1px solid #dfe7e6;
+  border-radius: 9px;
+}
+.pstudio-comm-list > button {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 14px 16px;
+  color: #25424c;
+  text-align: left;
+  cursor: pointer;
+  background: #fff;
+  border: 0;
+  border-bottom: 1px solid #eaf0ef;
+}
+.pstudio-comm-list > button:hover,
+.pstudio-comm-list > button.selected {
+  background: #e7f5ee;
+}
+.pstudio-comm-list > button strong {
+  font-size: 13px;
+}
+.pstudio-comm-list > button small {
+  font-size: 10px;
+  color: #76888e;
+}
+.pstudio-comm-list > button span {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.pstudio-comm-detail {
+  max-height: calc(100dvh - 300px);
+  padding: 20px;
+  overflow: auto;
+}
+.pstudio-comm-detail h2 {
+  margin: 0 0 17px;
+  font-size: 19px;
+}
+.pstudio-comm-message {
+  padding: 17px;
+  margin-bottom: 13px;
+  background: #f8fbfa;
+  border: 1px solid #e3ecea;
+  border-radius: 12px;
+}
+.pstudio-comm-message > div {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.pstudio-comm-message small {
+  color: #788b90;
+}
+.pstudio-comm-message p {
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.pstudio-comm-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  min-height: 360px;
+  color: #7b8b90;
+  text-align: center;
+}
+.pstudio-comm-empty h2 {
+  margin: 0;
+  font-size: 17px;
+}
+.pstudio-comm-empty p,
+.pstudio-comm-muted {
+  font-size: 12px;
+  color: #7b8b90;
+}
+.pstudio-comm-muted {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  padding: 9px;
+}
+.pstudio-comm-error,
+.pstudio-comm-success {
+  padding: 12px 15px;
+  margin-bottom: 15px;
+  font-size: 12px;
+  border-radius: 10px;
+}
+.pstudio-comm-error {
+  color: #855322;
+  background: #fff5e8;
+  border: 1px solid #eed8ae;
+}
+.pstudio-comm-success {
+  color: #116c55;
+  background: #eaf8f1;
+  border: 1px solid #c8e7d8;
+}
+.pstudio-comm-calendar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 345px);
+  gap: 16px;
+}
+.pstudio-comm-agenda,
+.pstudio-comm-plan {
+  padding: 19px;
+  background: #fff;
+  border: 1px solid #e2e9e7;
+  border-radius: 14px;
+}
+.pstudio-comm-agenda h2 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-bottom: 14px;
+  font-size: 17px;
+  border-bottom: 1px solid #edf0ef;
+}
+.pstudio-comm-event {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 15px 3px;
+  border-bottom: 1px solid #edf0ef;
+}
+.pstudio-comm-event > span {
+  flex: 0 0 130px;
+  width: 130px;
+  font-size: 11px;
+  color: #0e795d;
+}
+.pstudio-comm-event strong,
+.pstudio-comm-event small {
+  display: block;
+}
+.pstudio-comm-event strong {
+  font-size: 13px;
+}
+.pstudio-comm-event small {
+  padding-top: 4px;
+  font-size: 11px;
+  color: #7b8b90;
+}
+.pstudio-comm-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+.pstudio-comm-plan h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.pstudio-comm-plan p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #7d8a8b;
+}
+.pstudio-comm-plan label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: #506c70;
+}
+.pstudio-comm-plan :is(input, select) {
+  min-height: 40px;
+  padding: 9px 10px;
+  color: #234047;
+  background: #fbfcfc;
+  border: 1px solid #dce7e4;
+  border-radius: 8px;
+}
+.pstudio-comm-plan button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+.pstudio-comm-plan small {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 10px;
+  color: #768b8b;
+}
+.pstudio-pane-switch {
+  display: flex;
+  gap: 5px;
+  padding: 11px 14px 0;
+}
+.pstudio-pane-switch button {
+  flex: 1;
+  padding: 9px;
+  color: #506975;
+  background: #f3f5f5;
+  border: 0;
+  border-radius: 9px;
+}
+.pstudio-pane-switch button.active {
+  color: #093d35;
+  background: #fff;
+  border: 1px solid #d9e2e0;
+}
+.pstudio-pane-switch span {
+  color: #079b72;
+}
+@media (max-width: 850px) {
+  .pstudio-comm-grid,
+  .pstudio-comm-calendar {
+    grid-template-columns: 1fr;
+  }
+  .pstudio-comm-list,
+  .pstudio-comm-detail {
+    max-height: 350px;
+  }
+}
+@media (max-width: 540px) {
+  .studio-shell .pstudio-communications {
+    padding: 13px 12px 90px;
+  }
+  .pstudio-comm-heading h1 {
+    font-size: 24px;
+  }
+  .pstudio-comm-counts > div {
+    padding: 9px;
+    font-size: 10px;
+  }
+  .pstudio-comm-counts strong {
+    font-size: 18px;
+  }
+  .pstudio-comm-event > span {
+    flex-basis: 95px;
+    width: 95px;
+  }
+}

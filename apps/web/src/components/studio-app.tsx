@@ -40,11 +40,14 @@ import {
   useRef,
   useState,
 } from "react";
+import { summarizeOperatorJobs } from "@/lib/operator-queue";
 import { authConfigured, getApiToken, getAuthClient } from "@/lib/studio-auth";
 import {
   selectAccessibleWorkspace,
   workspaceCreationAllowed,
 } from "@/lib/workspace-selection";
+import { AgentMailCalendar } from "./agentmail-calendar";
+import { AgentMailInbox } from "./agentmail-inbox";
 import { StudioAgent } from "./studio-agent";
 import { StudioMap } from "./studio-map";
 
@@ -570,6 +573,7 @@ export function StudioApp() {
     };
   }, [jobs, preview, selected, workspaceId]);
 
+  const operatorSummary = useMemo(() => summarizeOperatorJobs(jobs), [jobs]);
   const stageCounts = useMemo(
     () => ({
       all: prospects.length,
@@ -1161,6 +1165,18 @@ export function StudioApp() {
                   {mobileSheetExpanded ? "Collapse" : "Explore prospects"}
                 </span>
               </button>
+              <div className="pstudio-pane-switch">
+                <button aria-pressed="true" className="active" type="button">
+                  Prospects <span>{prospects.length}</span>
+                </button>
+                <button
+                  aria-pressed="false"
+                  onClick={() => setView("inbox")}
+                  type="button"
+                >
+                  Inbox
+                </button>
+              </div>
               <div className="studio-sidebar-heading">
                 <span className="studio-eyebrow">YOUR PIPELINE</span>
                 <h1>
@@ -1300,13 +1316,10 @@ export function StudioApp() {
               </div>
               <div className="studio-sidebar-footer">
                 <div className="prototype-batch">
-                  <span>{stageCounts.queued} queued</span>
-                  <span>
-                    {jobs.filter((j) => j.state === "running").length} running
-                  </span>
-                  <span>
-                    {jobs.filter((j) => j.state === "failed").length} blocked
-                  </span>
+                  <span>{operatorSummary.queued} queued</span>
+                  <span>{operatorSummary.running} running</span>
+                  <span>{operatorSummary.needsYou} needs you</span>
+                  <span>{operatorSummary.done} done</span>
                 </div>
                 <button
                   className="studio-btn-primary"
@@ -1859,98 +1872,14 @@ export function StudioApp() {
         </section>
       ) : null}
       {view === "inbox" ? (
-        <section className="prototype-view-page">
-          <header className="prototype-page-header">
-            <span className="studio-eyebrow">COMMUNICATIONS CENTER</span>
-            <h1>Inbox</h1>
-            <p>Prospect conversations and follow-up activity.</p>
-          </header>
-          <div className="prototype-metrics">
-            {["Unread", "Needs reply", "Follow-ups", "Approvals"].map(
-              (label) => (
-                <div key={label}>
-                  <strong>0</strong>
-                  <span>{label}</span>
-                </div>
-              )
-            )}
-          </div>
-          <div className="prototype-empty-state">
-            <Inbox size={38} />
-            <h2>No threads yet</h2>
-            <p>
-              Nobody has been contacted. Messaging is not connected to this
-              staging workspace.
-            </p>
-            <button
-              className="studio-btn-secondary"
-              onClick={() => setView("map")}
-              type="button"
-            >
-              Browse prospects
-            </button>
-          </div>
-        </section>
+        <AgentMailInbox request={studioApi} workspaceId={workspaceId} />
       ) : null}
       {view === "calendar" ? (
-        <section className="prototype-view-page">
-          <header className="prototype-page-header">
-            <span className="studio-eyebrow">PROSPECT RELATIONSHIPS</span>
-            <h1>Calendar</h1>
-            <p>Plan calls and track meetings once scheduling is connected.</p>
-          </header>
-          <div className="prototype-calendar">
-            <div className="prototype-calendar-body">
-              <h2>
-                {new Date().toLocaleDateString("en-US", {
-                  month: "long",
-                  year: "numeric",
-                })}
-              </h2>
-              <div className="prototype-calendar-week">
-                {Array.from({ length: 7 }, (_, i) => {
-                  const d = new Date();
-                  d.setDate(d.getDate() - d.getDay() + i);
-                  return (
-                    <div key={d.toISOString().slice(0, 10)}>
-                      <small>
-                        {d.toLocaleDateString("en-US", { weekday: "short" })}
-                      </small>
-                      <strong>{d.getDate()}</strong>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="prototype-empty-state">
-                <CalendarDays size={34} />
-                <h2>No scheduled calls</h2>
-                <p>Calendar integration has not been configured.</p>
-              </div>
-            </div>
-            <aside className="prototype-calendar-plan">
-              <span className="studio-eyebrow">PLAN A PHONE CALL</span>
-              <h2>Meeting preparation</h2>
-              <p>Connect scheduling to enable persistent appointments.</p>
-              <label>
-                Prospect
-                <select disabled>
-                  <option>Select after integration</option>
-                </select>
-              </label>
-              <label>
-                Date
-                <input disabled type="date" />
-              </label>
-              <label>
-                Time
-                <input disabled type="time" />
-              </label>
-              <button className="studio-btn-primary" disabled type="button">
-                Scheduling unavailable
-              </button>
-            </aside>
-          </div>
-        </section>
+        <AgentMailCalendar
+          prospects={prospects}
+          request={studioApi}
+          workspaceId={workspaceId}
+        />
       ) : null}
       <nav aria-label="Mobile navigation" className="prototype-mobile-nav">
         <button
