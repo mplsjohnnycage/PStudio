@@ -8,6 +8,7 @@ import {
   beginEnrichmentAttempt,
   completeEnrichmentAttempt,
   failEnrichmentAttempt,
+  readCompletedEnrichmentAttempt,
   recoverStaleEnrichmentAttempts,
 } from "../src/enrichment-queries.ts";
 import {
@@ -219,6 +220,48 @@ test("source identity mismatch never commits enrichment evidence", async () => {
     );
     assert.equal((await f.db.select().from(evidence)).length, 0);
     assert.equal((await f.db.select().from(jobs)).at(0).state, "running");
+  } finally {
+    await f.engine.close();
+  }
+});
+
+test("a completed enrichment is detectable after worker restart without re-claiming", async () => {
+  const f = await fixture();
+  try {
+    const first = await beginEnrichmentAttempt(f.db, f.jobId);
+    assert.equal(first?.attempt, 1);
+    const written = await completeEnrichmentAttempt(
+      f.db,
+      f.jobId,
+      1,
+      candidate(f.externalId)
+    );
+    assert.equal(written.kind, "completed");
+
+    // Replaying after the DB commit must not make a second claim or duplicate evidence.
+    assert.equal(await beginEnrichmentAttempt(f.db, f.jobId), null);
+    assert.equal(await readCompletedEnrichmentAttempt(f.db, f.jobId), 1);
+    assert.equal(
+      await readCompletedEnrichmentAttempt(f.db, "missing-job"),
+      null
+    );
+    assert.equal((await f.db.select().from(jobAttempts)).length, 1);
+    assert.equal((await f.db.select().from(evidence)).length, 1);
+    assert.equal((await f.db.select().from(previews)).length, 1);
+  } finally {
+    await f.engine.close();
+  }
+});
+
+test("a synthetic completed job without committed attempt evidence is not accepted", async () => {
+  const f = await fixture();
+  try {
+    assert.equal((await beginEnrichmentAttempt(f.db, f.jobId))?.attempt, 1);
+    await f.db.update(jobs).set({ state: "completed" });
+    assert.equal(await readCompletedEnrichmentAttempt(f.db, f.jobId), null);
+    await f.db.update(jobAttempts).set({ state: "completed" });
+    assert.equal(await readCompletedEnrichmentAttempt(f.db, f.jobId), null);
+    assert.equal((await f.db.select().from(evidence)).length, 0);
   } finally {
     await f.engine.close();
   }

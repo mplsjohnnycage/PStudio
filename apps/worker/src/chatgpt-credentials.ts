@@ -5,6 +5,7 @@ import {
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { PiProviderCredential } from "@rivet-dev/pi";
 import { actor } from "rivetkit";
+import { assertChatgptActorOwner } from "./chatgpt-owner-guard";
 
 /**
  * Private Actor, one per *authenticated* Neon user.
@@ -13,17 +14,22 @@ import { actor } from "rivetkit";
  */
 export const credentials = actor({
   actions: {
-    list: (c) =>
-      Object.entries(c.state.saved).map(([providerId, { type }]) => ({
+    list: (c) => {
+      assertChatgptActorOwner(c.key[0]);
+      return Object.entries(c.state.saved).map(([providerId, { type }]) => ({
         providerId,
         type,
-      })),
-    read: (c, provider: string): PiProviderCredential | undefined =>
-      withoutRefreshToken(c.state.saved[provider]),
+      }));
+    },
+    read: (c, provider: string): PiProviderCredential | undefined => {
+      assertChatgptActorOwner(c.key[0]);
+      return withoutRefreshToken(c.state.saved[provider]);
+    },
     refresh: async (
       c,
       provider: string
     ): Promise<PiProviderCredential | undefined> => {
+      assertChatgptActorOwner(c.key[0]);
       if (provider !== "openai") {
         return undefined;
       }
@@ -45,6 +51,7 @@ export const credentials = actor({
       return withoutRefreshToken(refreshed);
     },
     save: (c, provider: string, credential: Credential) => {
+      assertChatgptActorOwner(c.key[0]);
       if (provider !== "openai") {
         throw new Error("Unsupported identity provider");
       }

@@ -1,3 +1,4 @@
+import { allowedChatgptUser } from "@prospect-studio/api/chatgpt-hosted-policy";
 import type { AgentBrokerAdapter } from "./agent-broker";
 
 const PUBLIC_TOKEN = /^(pk_|ck_)/;
@@ -23,6 +24,26 @@ export function privateAgentConfigured(env = process.env): boolean {
       Boolean(env.RIVET_NAMESPACE) &&
       token.length >= 12 &&
       !PUBLIC_TOKEN.test(token)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** A provider listed in Rivet may be revoked or expired; verify refreshability. */
+export async function chatgptCredentialConnected(source: {
+  refresh: (
+    provider: string
+  ) => Promise<{ type: string; access?: string; expires?: number } | undefined>;
+}): Promise<boolean> {
+  try {
+    const credential = await source.refresh("openai");
+    return (
+      credential?.type === "oauth" &&
+      typeof credential.access === "string" &&
+      credential.access.length > 0 &&
+      typeof credential.expires === "number" &&
+      credential.expires > Date.now() + 60_000
     );
   } catch {
     return false;
@@ -65,10 +86,9 @@ export function createPrivateAgentBroker(): AgentBrokerAdapter {
   return {
     available,
     connected: (userId) =>
-      clientCall(async (client) => {
-        const providers = await client.credentials.getOrCreate([userId]).list();
-        return providers.some((p) => p.providerId === "openai");
-      }),
+      clientCall(async (client) =>
+        chatgptCredentialConnected(client.credentials.getOrCreate([userId]))
+      ),
     loginFinish: (userId, redirectUrl) =>
       clientCall(async (client) =>
         client.chatgptLogin.getOrCreate([userId]).finish(redirectUrl)
@@ -77,6 +97,7 @@ export function createPrivateAgentBroker(): AgentBrokerAdapter {
       clientCall(async (client) =>
         client.chatgptLogin.getOrCreate([userId]).start()
       ),
+    planEnabled: (userId: string) => allowedChatgptUser(userId),
     prompt: (userId, workspaceId, text, requestId) =>
       clientCall(async (client) => {
         const result = await client.operatorAgent
