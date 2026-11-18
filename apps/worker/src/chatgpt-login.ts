@@ -6,6 +6,7 @@ import {
 import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 import {
   allowedChatgptUser,
+  chatgptOAuthDeviceId,
   validChatgptHostId,
 } from "@prospect-studio/api/chatgpt-hosted-policy";
 import { actor, type Registry, UserError } from "rivetkit";
@@ -97,7 +98,7 @@ export const chatgptLogin = actor({
             AbortSignal.timeout(10 * 60_000),
           ]),
         },
-        { agentName: APP_NAME, getDeviceId: () => hostId }
+        { agentName: APP_NAME, getDeviceId: () => chatgptOAuthDeviceId(hostId) }
       );
       c.vars.pending = {
         cancel: () => controller.abort(),
