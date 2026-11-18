@@ -7,7 +7,8 @@
     "build": "tsc --noEmit",
     "build:runtime": "eve build",
     "check-types": "tsc --noEmit",
-    "test": "node --import tsx --test tests/*.test.mjs"
+    "test": "node --import tsx --test tests/*.test.mjs",
+    "verify:live": "node --import tsx scripts/verify-live.mjs"
   },
   "dependencies": {
     "@prospect-studio/api": "*",

@@ -52,6 +52,10 @@ npm run build:runtime -w @prospect-studio/eve
 # Bootstrap is a schema-changing action. Verify the test branch first.
 (cd apps/eve && npx --package @workflow/world-postgres bootstrap)
 (cd apps/eve && ./node_modules/.bin/eve start --host 127.0.0.1 --port 3007)
+
+# Only after owner consent exists in Rivet, using the existing
+# staging worker private environment in a secure, owner-controlled process:
+npm run verify:live -w @prospect-studio/eve
 ```
 
 No bootstrap, production database migration, model request, server start
