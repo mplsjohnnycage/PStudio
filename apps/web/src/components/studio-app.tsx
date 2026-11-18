@@ -320,6 +320,7 @@ export function StudioApp() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
+  const previewRequestId = useRef(0);
   const [previewVersions, setPreviewVersions] = useState<PreviewVersion[]>([]);
   const [evidenceFeed, setEvidenceFeed] = useState<EvidenceFeed | null>(null);
   const [review, setReview] = useState<Review | null>(null);
@@ -448,6 +449,7 @@ export function StudioApp() {
     refresh(workspaceId).catch((e) =>
       setError(e instanceof Error ? e.message : "Failed to load prospects")
     );
+    previewRequestId.current += 1;
     setSelected(null);
     setPreview(null);
     setPreviewVersions([]);
@@ -455,6 +457,10 @@ export function StudioApp() {
   }, [workspaceId, refresh]);
 
   useEffect(() => {
+    previewRequestId.current += 1;
+    setPreview(null);
+    setReview(null);
+    let cancelled = false;
     if (!(workspaceId && selected)) {
       setPreviewVersions([]);
       setReview(null);
@@ -463,8 +469,19 @@ export function StudioApp() {
     studioApi<{ previews: PreviewVersion[] }>(
       `/workspaces/${workspaceId}/prospects/${selected}/previews`
     )
-      .then((result) => setPreviewVersions(result.previews))
-      .catch(() => setPreviewVersions([]));
+      .then((result) => {
+        if (!cancelled) {
+          setPreviewVersions(result.previews);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPreviewVersions([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [workspaceId, selected]);
 
   const completedJobCount = jobs.filter(
@@ -743,6 +760,8 @@ export function StudioApp() {
     window.setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
   async function createPreview(prospectId: string) {
+    previewRequestId.current += 1;
+    const requestId = previewRequestId.current;
     await action(
       "preview",
       () =>
@@ -765,11 +784,17 @@ export function StudioApp() {
         const details = await studioApi<Preview>(
           `/workspaces/${workspaceId}/previews/${res.previewId}`
         );
+        if (requestId !== previewRequestId.current) {
+          return;
+        }
         setPreview(details);
         setReview(null);
         const versions = await studioApi<{ previews: PreviewVersion[] }>(
           `/workspaces/${workspaceId}/prospects/${prospectId}/previews`
         );
+        if (requestId !== previewRequestId.current) {
+          return;
+        }
         setPreviewVersions(versions.previews);
         setNotice(
           `Private draft v${details.version} generated. No publication or outreach occurred.`
@@ -779,19 +804,29 @@ export function StudioApp() {
   }
 
   async function loadPreview(previewId: string) {
+    previewRequestId.current += 1;
+    const requestId = previewRequestId.current;
     await action(
       "load-preview",
       () =>
         studioApi<Preview>(`/workspaces/${workspaceId}/previews/${previewId}`),
       async (details) => {
+        if (requestId !== previewRequestId.current) {
+          return;
+        }
         setPreview(details);
+        setReview(null);
         try {
           const record = await studioApi<Review>(
             `/workspaces/${workspaceId}/previews/${previewId}/review`
           );
-          setReview(record);
+          if (requestId === previewRequestId.current) {
+            setReview(record);
+          }
         } catch {
-          setReview(null);
+          if (requestId === previewRequestId.current) {
+            setReview(null);
+          }
         }
       }
     );
@@ -1024,7 +1059,7 @@ export function StudioApp() {
                 : workspaceLoadState === "error"
                   ? "The workspace service did not respond. Retry without signing out."
                   : canCreateWorkspace
-                    ? "If you already have a workspace, use its owner account. Otherwise, create a private workspace to begin."
+                    ? "If you already have a workspace, use its owner account. Otherwise, create a private workspace to begin."
                     : "This staging deployment is invite-only. Sign in with the owner account that already has workspace access."}
             </p>
           </div>
@@ -1830,7 +1865,7 @@ export function StudioApp() {
             </aside>
             <div className="prototype-studio-canvas">
               <div className="prototype-canvas-bar">
-                <strong>{chosen?.name ?? "Design canvas"}</strong>
+                <strong>{chosen?.name ?? "Design canvas"}</strong>
                 <div>
                   <button
                     className={studioDevice === "desktop" ? "active" : ""}
