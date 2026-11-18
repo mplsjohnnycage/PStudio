@@ -14,10 +14,23 @@ export interface HostedChatGPTEnvironment {
 
 const UUID =
   /^(?:urn:uuid:)?[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const URN_PREFIX = /^urn:uuid:/i;
 const USER_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{1,255}$/;
 
 export function validChatgptHostId(value: string | undefined): boolean {
   return UUID.test(value ?? "");
+}
+
+/**
+ * The Pi/OpenAI OAuth library expects the bare device UUID and prepends
+ * urn:uuid: itself. Our config accepts either form and may be shared with
+ * other systems that use the full URN.
+ */
+export function chatgptOAuthDeviceId(value: string): string {
+  if (!validChatgptHostId(value)) {
+    throw new Error("Invalid ChatGPT agent host identity");
+  }
+  return value.replace(URN_PREFIX, "").toLowerCase();
 }
 
 /** Explicit config is an operator assertion, not provider-issued approval. */
