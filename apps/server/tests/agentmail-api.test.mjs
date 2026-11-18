@@ -272,3 +272,36 @@ test("AgentMail must not accept a thread result without inbox attribution", asyn
   });
   await assert.rejects(client.getThread("thread-1"), INBOX_MISMATCH);
 });
+
+test("calendar server rejects ambiguous DST holds even if the browser is bypassed", async () => {
+  const { app, calls } = makeApp();
+  const baseline = {
+    clientId: "ad7aefb7-a258-4eaf-a064-3e14a589ca49",
+    end: "2026-11-18T10:30:00",
+    prospectId: "p1",
+    start: "2026-11-18T10:00:00",
+    timezone: "America/Chicago",
+  };
+  const post = (data) =>
+    app.request(`${url}/events`, {
+      body: JSON.stringify(data),
+      headers: { ...headers, "Content-Type": "application/json" },
+      method: "POST",
+    });
+  const invalidHolds = [
+    { end: "2026-03-08T03:00:00", start: "2026-03-08T02:30:00" },
+    { end: "2026-11-01T02:00:00", start: "2026-11-01T01:30:00" },
+    { end: "2026-03-08T02:15:00", start: "2026-03-08T01:45:00" },
+    { end: "2026-11-01T01:45:00", start: "2026-11-01T00:45:00" },
+    { end: "2026-11-18T10:30:30", start: "2026-11-18T10:00:00" },
+  ];
+  const rejected = await Promise.all(
+    invalidHolds.map((invalid) => post({ ...baseline, ...invalid }))
+  );
+  for (const response of rejected) {
+    assert.equal(response.status, 400);
+  }
+  assert.equal(calls.events, 0);
+  assert.equal((await post(baseline)).status, 201);
+  assert.equal(calls.events, 1);
+});

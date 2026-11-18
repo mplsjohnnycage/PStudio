@@ -1200,7 +1200,7 @@ export function StudioApp() {
               </div>
               <div className="prototype-side-actions">
                 <button onClick={() => setView("inbox")} type="button">
-                  <Inbox size={16} /> Inbox <span>0</span>
+                  <Inbox size={16} /> Inbox
                 </button>
                 <button onClick={() => setShowFilters((v) => !v)} type="button">
                   <SlidersHorizontal size={16} /> Filters
@@ -1369,10 +1369,10 @@ export function StudioApp() {
             </aside>
           ) : null}
           <section className="studio-map-panel">
-            <StudioMap />
+            <StudioMap userId={session.user.id} workspaceId={workspaceId} />
             <div className="prototype-map-glass-chip">
               <span className="studio-live-dot" /> {filtered.length} prospects
-              in view
+              listed
             </div>
             <div
               className={[

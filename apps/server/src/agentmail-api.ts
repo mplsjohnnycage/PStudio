@@ -1,3 +1,4 @@
+import { buildCentralCalendarHold } from "@prospect-studio/api/calendar-time";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
 import type { AgentMailClient } from "./agentmail-client";
@@ -14,6 +15,27 @@ const createEventSchema = z.strictObject({
   timezone: z.literal("America/Chicago"),
   title: z.string().trim().min(3).max(150).optional(),
 });
+function isValidCentralHold(start: string, end: string): boolean {
+  const duration = Date.parse(`${end}Z`) - Date.parse(`${start}Z`);
+  if (
+    !Number.isFinite(duration) ||
+    duration < 15 * 60_000 ||
+    duration > 2 * 3_600_000
+  ) {
+    return false;
+  }
+  try {
+    const normalized = buildCentralCalendarHold(
+      start.slice(0, 10),
+      start.slice(11, 16),
+      duration / 60_000
+    );
+    return normalized.start === start && normalized.end === end;
+  } catch {
+    return false;
+  }
+}
+
 export interface AgentMailRoutesDependencies {
   assignedWorkspaceId?: string;
   authorize: (userId: string, workspaceId: string) => Promise<boolean>;
@@ -140,14 +162,7 @@ export function createAgentMailRoutes(deps: AgentMailRoutesDependencies) {
       return c.json({ error: "invalid_input" }, 400);
     }
     const { data } = parsed;
-    const duration = Date.parse(`${data.end}Z`) - Date.parse(`${data.start}Z`);
-    if (
-      !(
-        Number.isFinite(duration) &&
-        duration >= 15 * 60_000 &&
-        duration <= 2 * 3_600_000
-      )
-    ) {
+    if (!isValidCentralHold(data.start, data.end)) {
       return c.json({ error: "invalid_input" }, 400);
     }
     try {
