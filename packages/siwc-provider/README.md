@@ -46,9 +46,23 @@ export default defineAgent({
 });
 ```
 
-The snippet's broker is an **application-owned dependency**, not an existing
-module. Do not load raw OAuth tokens from environment variables, commit them, or
-send them to browsers. An agent cannot select or change its credential principal.
+The snippet illustrates the credential-source interface only. PStudio now
+has a concrete private **Rivet credentials Actor bridge** at
+`apps/worker/src/eve-siwc-credential-source.ts`, and the
+`createOwnerEveSiwcModel` factory at
+`apps/worker/src/eve-siwc-model.ts`. The bridge reuses the existing
+PStudio login and per-owner Rivet credentials Actor; it never returns a
+refresh token or creates a separate OAuth login. The PStudio worker must
+still have its private Rivet endpoint, token, verified Neon owner identity,
+and host configuration. Do not load raw OAuth tokens from environment
+variables, commit them, or send them to browsers. An agent cannot select
+or change its credential principal.
+
+**Native Rivet Eve / Workflow World integrations:** they exist but their
+published versions are not currently compatible with Eve 1.0.0.
+See `docs/rivet-eve-native-compatibility.md` for exact published
+versions and proof. Keep Workflow Postgres World on an isolated Neon branch
+until a compatible native Rivet World has been tested.
 
 ## Official sign-in setup
 

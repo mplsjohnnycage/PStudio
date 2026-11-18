@@ -2,6 +2,7 @@ import {
   type Credential,
   InMemoryCredentialStore,
 } from "@earendil-works/pi-ai";
+import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { PiProviderCredential } from "@rivet-dev/pi";
 import { actor } from "rivetkit";
@@ -27,7 +28,8 @@ export const credentials = actor({
     },
     refresh: async (
       c,
-      provider: string
+      provider: string,
+      options?: { forceRefresh?: boolean }
     ): Promise<PiProviderCredential | undefined> => {
       assertChatgptActorOwner(c.key[0]);
       if (provider !== "openai") {
@@ -36,6 +38,20 @@ export const credentials = actor({
       const saved = c.state.saved[provider];
       if (!saved) {
         return undefined;
+      }
+      if (options?.forceRefresh) {
+        if (saved.type !== "oauth") {
+          return undefined;
+        }
+        // Only the Rivet Actor can rotate the refresh credential. No refresh
+        // tokens are passed to Eve or returned by this action.
+        const { oauth } = openaiProvider().auth;
+        if (!oauth) {
+          return undefined;
+        }
+        const rotated = await oauth.refresh(saved, AbortSignal.timeout(15_000));
+        c.state.saved[provider] = { ...rotated, type: "oauth" };
+        return withoutRefreshToken(c.state.saved[provider]);
       }
       const store = new InMemoryCredentialStore();
       await store.modify(provider, async () => saved);

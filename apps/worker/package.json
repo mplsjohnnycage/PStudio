@@ -22,6 +22,7 @@
     "@earendil-works/pi-schema": "^1.5.2",
     "@prospect-studio/api": "*",
     "@prospect-studio/db": "*",
+    "@prospect-studio/siwc-provider": "*",
     "@rivet-dev/agentos-core": "^0.4.8",
     "@rivet-dev/pi": "^0.5.6",
     "@rivet-dev/workflows": "1.1.1",
