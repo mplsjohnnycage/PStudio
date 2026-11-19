@@ -316,6 +316,9 @@ export function StudioApp() {
   const [agentOpen, setAgentOpen] = useState(false);
   const lastAgentWorkspace = useRef("");
   const [workspaceId, setWorkspaceId] = useState("");
+  const currentWorkspaceId = useRef(workspaceId);
+  currentWorkspaceId.current = workspaceId;
+  const refreshRequestId = useRef(0);
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -409,6 +412,11 @@ export function StudioApp() {
   }, [workspaceId]);
 
   const refresh = useCallback(async (ws: string) => {
+    refreshRequestId.current += 1;
+    const requestId = refreshRequestId.current;
+    if (ws !== currentWorkspaceId.current) {
+      return;
+    }
     if (!ws) {
       setProspects([]);
       setJobs([]);
@@ -420,6 +428,12 @@ export function StudioApp() {
       ),
       studioApi<{ jobs: Job[] }>(`/workspaces/${encodeURIComponent(ws)}/jobs`),
     ]);
+    if (
+      requestId !== refreshRequestId.current ||
+      ws !== currentWorkspaceId.current
+    ) {
+      return;
+    }
     setProspects(a.prospects);
     setJobs(b.jobs);
   }, []);
