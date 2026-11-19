@@ -51,6 +51,19 @@ import { AgentMailInbox } from "./agentmail-inbox";
 import { StudioAgent } from "./studio-agent";
 import { StudioMap } from "./studio-map";
 
+interface LicenseMatch {
+  externalId: string;
+  name: string;
+}
+
+class LicenseSelectionRequired extends Error {
+  readonly matches: LicenseMatch[];
+  constructor(matches: LicenseMatch[]) {
+    super("Select a historical license record to import.");
+    this.matches = matches;
+  }
+}
+
 interface Workspace {
   id: string;
   name: string;
@@ -140,22 +153,33 @@ async function studioApi<T>(path: string, options?: RequestInit): Promise<T> {
   const value = await response.json();
   if (!response.ok) {
     const code = (value as { error?: string }).error ?? "request_failed";
+    if (code === "selection_required") {
+      const { matches } = value as { matches?: unknown };
+      if (Array.isArray(matches)) {
+        const valid = matches.filter(
+          (item): item is LicenseMatch =>
+            item !== null &&
+            typeof item === "object" &&
+            typeof item.externalId === "string" &&
+            typeof item.name === "string"
+        );
+        throw new LicenseSelectionRequired(valid);
+      }
+    }
     throw new Error(
-      code === "selection_required"
-        ? `Multiple historical matches. Select a license ID and retry: ${JSON.stringify((value as { matches?: unknown }).matches ?? [])}`
-        : code === "not_found"
-          ? "Not found, or this workspace is not accessible."
-          : code === "unauthorized"
-            ? "Your session has expired or is not authorized."
-            : code === "temporarily_unavailable"
-              ? "The service is unavailable. Check the server and database connection."
-              : code === "limit_reached"
-                ? "Workspace limit reached."
-                : code === "invite_only"
-                  ? "This deployment is invite-only. Sign in with an existing workspace owner account."
-                  : code === "invalid_input"
-                    ? "Review your inputs and try again."
-                    : code
+      code === "not_found"
+        ? "Not found, or this workspace is not accessible."
+        : code === "unauthorized"
+          ? "Your session has expired or is not authorized."
+          : code === "temporarily_unavailable"
+            ? "The service is unavailable. Check the server and database connection."
+            : code === "limit_reached"
+              ? "Workspace limit reached."
+              : code === "invite_only"
+                ? "This deployment is invite-only. Sign in with an existing workspace owner account."
+                : code === "invalid_input"
+                  ? "Review your inputs and try again."
+                  : code
     );
   }
   return value as T;
@@ -328,6 +352,7 @@ export function StudioApp() {
   const [workspaceName, setWorkspaceName] = useState("");
   const [discoveryQuery, setDiscoveryQuery] = useState("");
   const [discoveryExternalId, setDiscoveryExternalId] = useState("");
+  const [licenseMatches, setLicenseMatches] = useState<LicenseMatch[]>([]);
   const [newName, setNewName] = useState("");
   const [newAddress, setNewAddress] = useState("");
   const [newWebsite, setNewWebsite] = useState("");
@@ -663,45 +688,36 @@ export function StudioApp() {
         ? { externalId: discoveryExternalId.trim() }
         : {}),
     };
-    await action(
-      "discover",
-      () =>
-        studioApi<{ prospectId: string; kind: string; recordStatus: string }>(
-          `/workspaces/${workspaceId}/discover/minneapolis-license`,
-          { body: JSON.stringify(payload), method: "POST" }
-        ),
-      async ({ prospectId, kind }) => {
-        await refresh(workspaceId);
-        setSelected(prospectId);
-        setDiscoveryExternalId("");
-        if (kind === "duplicate") {
-          setNotice(
-            "Existing sourced prospect selected; duplicate record not created. Review its job status or generate another draft."
-          );
-          return;
-        }
-        // One deliberate import action starts the supported fixed-source workflow.
-        // If enqueue fails, admission remains durable and can be retried manually.
-        try {
-          await studioApi(
-            `/workspaces/${workspaceId}/prospects/${prospectId}/jobs`,
-            {
-              body: JSON.stringify({ type: "enrich" }),
-              headers: { "Idempotency-Key": `import-${prospectId}` },
-              method: "POST",
-            }
-          );
-          await refresh(workspaceId);
-          setNotice(
-            "Historical municipal source imported and enrichment queued. A private site draft will be generated automatically after the source is checked."
-          );
-        } catch (importFailure) {
-          setNotice(
-            `Source record saved, but enrichment was not queued: ${importFailure instanceof Error ? importFailure.message : "Unknown error"}. Use source enrichment to retry.`
-          );
-        }
+    setBusy("discover");
+    setError(null);
+    setNotice(null);
+    setLicenseMatches([]);
+    try {
+      const { prospectId, kind } = await studioApi<{
+        prospectId: string;
+        kind: string;
+        recordStatus: string;
+      }>(`/workspaces/${workspaceId}/discover/minneapolis-license`, {
+        body: JSON.stringify(payload),
+        method: "POST",
+      });
+      await refresh(workspaceId);
+      setSelected(prospectId);
+      setDiscoveryExternalId("");
+      setNotice(
+        kind === "duplicate"
+          ? "Existing sourced prospect selected; duplicate record not created."
+          : "Imported historical municipal license evidence. Current business and license status remain unverified."
+      );
+    } catch (cause) {
+      if (cause instanceof LicenseSelectionRequired) {
+        setLicenseMatches(cause.matches);
+      } else {
+        setError(cause instanceof Error ? cause.message : "Unexpected error");
       }
-    );
+    } finally {
+      setBusy(null);
+    }
   }
   async function enqueue(prospectId: string) {
     await action(
@@ -1046,7 +1062,7 @@ export function StudioApp() {
               <RefreshCcw size={15} />
               {workspaceLoadState === "error" ? "Retry" : "Recheck access"}
             </button>
-          ) : null}
+          ) : null}
           {workspaceLoadState === "ready" && canCreateWorkspace ? (
             <button
               className="studio-btn-primary"
@@ -1341,7 +1357,11 @@ export function StudioApp() {
                     id="license-lookup"
                     maxLength={80}
                     minLength={3}
-                    onChange={(e) => setDiscoveryQuery(e.target.value)}
+                    onChange={(e) => {
+                      setDiscoveryQuery(e.target.value);
+                      setLicenseMatches([]);
+                      setDiscoveryExternalId("");
+                    }}
                     placeholder="Search business name"
                     required
                     value={discoveryQuery}
@@ -1353,9 +1373,34 @@ export function StudioApp() {
                     placeholder="Optional license ID for matches"
                     value={discoveryExternalId}
                   />
+                  {licenseMatches.length > 0 ? (
+                    <label>
+                      Matching historical records
+                      <select
+                        aria-label="Select historical license match"
+                        onChange={(e) => setDiscoveryExternalId(e.target.value)}
+                        required
+                        value={discoveryExternalId}
+                      >
+                        <option value="">Choose a license</option>
+                        {licenseMatches.map((match) => (
+                          <option
+                            key={match.externalId}
+                            value={match.externalId}
+                          >
+                            {match.name} — {match.externalId}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                   <button
                     className="studio-btn-secondary"
-                    disabled={!isOperator || busy !== null}
+                    disabled={
+                      !isOperator ||
+                      busy !== null ||
+                      (licenseMatches.length > 0 && !discoveryExternalId)
+                    }
                     type="submit"
                   >
                     <Search size={15} /> Import sourced record
@@ -1822,7 +1867,7 @@ export function StudioApp() {
                   ) : null}
                   <p>
                     Review: {review?.state ?? "Draft"} · No public publication
-                  </p>
+                  </p>
                 </>
               ) : (
                 <p>Select a saved prospect to begin designing.</p>
