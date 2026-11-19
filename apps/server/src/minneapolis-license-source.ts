@@ -171,7 +171,12 @@ export async function lookupMinneapolisLicense(
     `licenseNumber = '${externalId}'`,
     fetcher
   );
-  return (
-    candidates.find((candidate) => candidate.externalId === externalId) ?? null
+  const matches = candidates.filter(
+    (candidate) => candidate.externalId === externalId
   );
+  // Duplicate source identities are ambiguous; never attach evidence arbitrarily.
+  if (matches.length > 1) {
+    throw new Error("Ambiguous license identifier");
+  }
+  return matches[0] ?? null;
 }
