@@ -112,3 +112,23 @@ test("provider rejects malformed search, non-JSON provider responses and untrust
     []
   );
 });
+
+test("malformed provider feature fails closed rather than silently dropping a search match", async () => {
+  await Promise.all(
+    [null, {}, { attributes: null }, { attributes: [] }].map((feature) =>
+      assert.rejects(
+        searchMinneapolisLicense(
+          "PAINT",
+          async () =>
+            new Response(
+              JSON.stringify({ features: [sourceRecord.features[0], feature] }),
+              {
+                status: 200,
+              }
+            )
+        ),
+        INVALID_SOURCE
+      )
+    )
+  );
+});
