@@ -129,10 +129,11 @@ async function queryPublicLicenses(
   ) {
     throw new Error("Invalid source response");
   }
-  const at = new Date();
-  return parsed.features
-    .filter(
-      (feature): feature is { attributes: LicenseAttributes } =>
+  // A malformed feature means the provider response is not trustworthy as a
+  // complete search result. Do not silently drop it and imply no match exists.
+  if (
+    !parsed.features.every(
+      (feature) =>
         feature !== null &&
         typeof feature === "object" &&
         !Array.isArray(feature) &&
@@ -141,8 +142,17 @@ async function queryPublicLicenses(
         typeof feature.attributes === "object" &&
         !Array.isArray(feature.attributes)
     )
+  ) {
+    throw new Error("Invalid source response");
+  }
+  const at = new Date();
+  return parsed.features
     .map((feature) =>
-      candidateFromAttributes(feature.attributes, url.toString(), at)
+      candidateFromAttributes(
+        (feature as { attributes: LicenseAttributes }).attributes,
+        url.toString(),
+        at
+      )
     )
     .filter((candidate): candidate is SourceCandidate => candidate !== null);
 }
