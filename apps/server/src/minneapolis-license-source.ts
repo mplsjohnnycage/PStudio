@@ -121,9 +121,14 @@ async function queryPublicLicenses(
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Invalid source response");
   }
-  const parsed = value as { features?: unknown; error?: unknown };
+  const parsed = value as {
+    features?: unknown;
+    error?: unknown;
+    exceededTransferLimit?: unknown;
+  };
   if (
     parsed.error ||
+    parsed.exceededTransferLimit === true ||
     !Array.isArray(parsed.features) ||
     parsed.features.length > 5
   ) {
