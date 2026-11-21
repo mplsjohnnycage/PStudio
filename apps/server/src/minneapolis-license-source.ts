@@ -37,11 +37,6 @@ function candidateFromAttributes(
   if (!(license && LICENSE.test(license) && name)) {
     return null;
   }
-  const address = [raw.address1, raw.city, raw.state, raw.zip]
-    .filter((item) => typeof item === "string" && item.trim().length > 0)
-    .map((item) => String(item).trim())
-    .join(", ")
-    .replace(ADDRESS_SUFFIX, ", $1 $2");
   const safe = {
     address1: textField(raw.address1, 150),
     city: textField(raw.city, 100),
@@ -54,6 +49,11 @@ function candidateFromAttributes(
     state: textField(raw.state, 2),
     zip: textField(raw.zip, 12),
   };
+  const address = [safe.address1, safe.city, safe.state, safe.zip]
+    .filter((item): item is string => item !== null)
+    .map((item) => String(item).trim())
+    .join(", ")
+    .replace(ADDRESS_SUFFIX, ", $1 $2");
   const expiration =
     typeof safe.expirationDate === "number" &&
     Number.isFinite(safe.expirationDate)
