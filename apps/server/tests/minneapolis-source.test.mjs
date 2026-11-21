@@ -112,3 +112,25 @@ test("provider rejects malformed search, non-JSON provider responses and untrust
     []
   );
 });
+
+test("unbounded or invalid address fields cannot leak into a candidate address", async () => {
+  const raw = {
+    features: [
+      {
+        attributes: {
+          ...sourceRecord.features[0].attributes,
+          address1: "X".repeat(500),
+          city: { malicious: "not a city" },
+          state: "MINNESOTA",
+          zip: "55331",
+        },
+      },
+    ],
+  };
+  const [candidate] = await searchMinneapolisLicense(
+    "PAINT",
+    async () => new Response(JSON.stringify(raw), { status: 200 })
+  );
+  assert.equal(candidate.physicalAddress, "55331");
+  assert.equal(JSON.parse(candidate.sourceExcerpt).address1, null);
+});
