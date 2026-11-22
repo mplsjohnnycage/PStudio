@@ -3,6 +3,8 @@ import { test } from "node:test";
 import { lookupMinneapolisLicense } from "../src/minneapolis-license-source.ts";
 
 const INVALID_LICENSE = /Invalid license identifier/;
+const AMBIGUOUS_LICENSE = /Ambiguous license identifier/;
+const INVALID_SOURCE = /Invalid source response/;
 
 test("exact-source lookup fetches by validated license and rejects mismatched provider identity", async () => {
   let called = false;
@@ -60,5 +62,53 @@ test("malformed license identifier cannot reach remote network", async () => {
       throw new Error("must not fetch");
     }),
     INVALID_LICENSE
+  );
+});
+
+test("duplicate exact source identities fail closed instead of choosing arbitrary evidence", async () => {
+  const fetcher = () =>
+    new Response(
+      JSON.stringify({
+        features: [
+          {
+            attributes: {
+              dbaName: "FIRST BUSINESS",
+              licenseNumber: "TLIC22572",
+            },
+          },
+          {
+            attributes: {
+              dbaName: "SECOND BUSINESS",
+              licenseNumber: "TLIC22572",
+            },
+          },
+        ],
+      }),
+      { status: 200 }
+    );
+  await assert.rejects(
+    lookupMinneapolisLicense("TLIC22572", fetcher),
+    AMBIGUOUS_LICENSE
+  );
+});
+
+test("truncated ArcGIS results cannot be treated as complete license evidence", async () => {
+  await assert.rejects(
+    lookupMinneapolisLicense(
+      "TLIC22572",
+      () =>
+        new Response(
+          JSON.stringify({
+            exceededTransferLimit: true,
+            features: [
+              {
+                attributes: { dbaName: "EXAMPLE", licenseNumber: "TLIC22572" },
+              },
+            ],
+          }),
+          { status: 200 }
+        )
+    ),
+    INVALID_SOURCE
   );
 });
