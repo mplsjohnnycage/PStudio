@@ -22,6 +22,7 @@ export interface ProspectSummary {
   id: string;
   name: string;
   physicalAddress: string | null;
+  sourceProviders?: readonly string[];
   stage: string;
   websiteStatus: string;
   websiteUrl: string | null;

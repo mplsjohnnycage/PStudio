@@ -40,6 +40,11 @@ import {
   useRef,
   useState,
 } from "react";
+import {
+  evidenceScope,
+  selectScopedEvidence,
+  sourceConfidence,
+} from "@/lib/evidence-context";
 import { summarizeOperatorJobs } from "@/lib/operator-queue";
 import { authConfigured, getApiToken, getAuthClient } from "@/lib/studio-auth";
 import {
@@ -74,12 +79,14 @@ interface Prospect {
   id: string;
   name: string;
   physicalAddress: string | null;
+  sourceProviders?: string[];
   stage: string;
   websiteStatus: string;
   websiteUrl: string | null;
 }
 interface EvidenceFeed {
   claims: {
+    evidenceIds?: string[];
     field: string;
     id: string;
     kind: string;
@@ -349,7 +356,21 @@ export function StudioApp() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const previewRequestId = useRef(0);
   const [previewVersions, setPreviewVersions] = useState<PreviewVersion[]>([]);
-  const [evidenceFeed, setEvidenceFeed] = useState<EvidenceFeed | null>(null);
+  const [storedEvidence, setStoredEvidence] = useState<{
+    scope: string;
+    feed: EvidenceFeed | null;
+    status: "ready" | "error";
+  } | null>(null);
+  const activeEvidenceScope = evidenceScope(
+    session?.user?.id,
+    workspaceId,
+    selected
+  );
+  const scopedEvidence = selectScopedEvidence(
+    storedEvidence,
+    activeEvidenceScope
+  );
+  const evidenceFeed = scopedEvidence?.feed ?? null;
   const [review, setReview] = useState<Review | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showWorkspaceCreate, setShowWorkspaceCreate] = useState(false);
@@ -528,8 +549,8 @@ export function StudioApp() {
   ).length;
   // biome-ignore lint/correctness/useExhaustiveDependencies: finished background jobs invalidate the stored evidence view.
   useEffect(() => {
-    if (!(workspaceId && selected)) {
-      setEvidenceFeed(null);
+    if (!(workspaceId && selected && activeEvidenceScope)) {
+      setStoredEvidence(null);
       return;
     }
     let active = true;
@@ -538,18 +559,26 @@ export function StudioApp() {
     )
       .then((feed) => {
         if (active) {
-          setEvidenceFeed(feed);
+          setStoredEvidence({
+            feed,
+            scope: activeEvidenceScope,
+            status: "ready",
+          });
         }
       })
       .catch(() => {
         if (active) {
-          setEvidenceFeed(null);
+          setStoredEvidence({
+            feed: null,
+            scope: activeEvidenceScope,
+            status: "error",
+          });
         }
       });
     return () => {
       active = false;
     };
-  }, [completedJobCount, selected, workspaceId]);
+  }, [activeEvidenceScope, completedJobCount, selected, workspaceId]);
 
   const current = workspaces.find((w) => w.id === workspaceId);
   const isOperator = current?.role === "owner" || current?.role === "operator";
@@ -1570,14 +1599,20 @@ export function StudioApp() {
                       <Shield size={18} />
                       <div>
                         <strong>
-                          {chosen.hasExternalSource
-                            ? "Historical public registry"
-                            : "Operator-reported"}
+                          {
+                            sourceConfidence(
+                              chosen.hasExternalSource,
+                              chosen.sourceProviders
+                            ).label
+                          }
                         </strong>
                         <p>
-                          {chosen.hasExternalSource
-                            ? "Registry evidence is sourced, but business activity and license status remain unverified."
-                            : "Operator-provided details are unverified. Add a sourced record for registry enrichment."}
+                          {
+                            sourceConfidence(
+                              chosen.hasExternalSource,
+                              chosen.sourceProviders
+                            ).description
+                          }
                         </p>
                       </div>
                     </div>
@@ -1587,7 +1622,9 @@ export function StudioApp() {
                     <strong>
                       {evidenceFeed
                         ? `${evidenceFeed.evidence.length} sources · ${evidenceFeed.claims.length} claims`
-                        : "Loading source history"}
+                        : scopedEvidence?.status === "error"
+                          ? "Source history unavailable"
+                          : "Loading source history"}
                     </strong>
                     {evidenceFeed?.evidence.slice(0, 3).map((item) => (
                       <div key={item.id}>
@@ -1608,10 +1645,35 @@ export function StudioApp() {
                       </div>
                     ))}
                     {evidenceFeed?.claims.slice(0, 8).map((claim) => (
-                      <p key={claim.id}>
-                        <b>{claim.field}</b> · {claim.value ?? "Unknown"}{" "}
-                        <small>({claim.kind})</small>
-                      </p>
+                      <div key={claim.id}>
+                        <p>
+                          <b>{claim.field}</b> · {claim.value ?? "Unknown"}{" "}
+                          <small>({claim.kind})</small>
+                        </p>
+                        {claim.evidenceIds?.map((id) => {
+                          const source = evidenceFeed.evidence.find(
+                            (item) => item.id === id
+                          );
+                          return source?.sourceUri.startsWith("https://") ? (
+                            <a
+                              href={source.sourceUri}
+                              key={id}
+                              rel="noopener noreferrer"
+                              target="_blank"
+                            >
+                              {source.title} <ExternalLink size={13} />
+                            </a>
+                          ) : (
+                            <small key={id}>
+                              {source?.title ??
+                                "Linked source outside current history"}
+                            </small>
+                          );
+                        })}
+                        {claim.evidenceIds?.length ? null : (
+                          <small>No source link returned</small>
+                        )}
+                      </div>
                     ))}
                     <p>
                       Claims are attributed reports, not independently verified

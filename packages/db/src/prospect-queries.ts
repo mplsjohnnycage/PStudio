@@ -40,6 +40,9 @@ export async function listWorkspaceProspects(
       id: prospects.id,
       name: prospects.name,
       physicalAddress: prospects.physicalAddress,
+      sourceProviders: sql<
+        string[]
+      >`ARRAY(SELECT DISTINCT src.provider FROM prospect_external_ids AS src WHERE src.prospect_id = ${prospects.id} AND src.workspace_id = ${workspaceId} ORDER BY src.provider)`,
       stage: prospects.stage,
       websiteStatus: prospects.websiteStatus,
       websiteUrl: prospects.websiteUrl,

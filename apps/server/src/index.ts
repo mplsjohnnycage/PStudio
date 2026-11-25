@@ -6,6 +6,7 @@ import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { appRouter } from "@prospect-studio/api/routers/index";
 import { admitSourcedProspect } from "@prospect-studio/db/admission-queries";
 import { listWorkspaceAgentEvents } from "@prospect-studio/db/agent-session-queries";
+import { listProspectEvidence } from "@prospect-studio/db/evidence-queries";
 import { enqueueWorkspaceJob } from "@prospect-studio/db/job-enqueue";
 import { readWorkspaceJobs } from "@prospect-studio/db/job-queries";
 import {
@@ -37,6 +38,7 @@ import { createNeonTokenVerifier } from "./auth";
 import { createContext } from "./context";
 import { createDiscoveryRoutes } from "./discovery-api";
 import { ENV } from "./env.server";
+import { createEvidenceRoutes } from "./evidence-api";
 import { createJobEnqueueRoutes } from "./job-enqueue-api";
 import { createJobsRoutes } from "./jobs-api";
 import { searchMinneapolisLicense } from "./minneapolis-license-source";
@@ -109,6 +111,15 @@ app.route(
       createWorkspaceProspect(db, userId, workspaceId, input),
     list: (userId, workspaceId) =>
       listWorkspaceProspects(db, userId, workspaceId),
+    verify,
+  })
+);
+
+app.route(
+  "/v1",
+  createEvidenceRoutes({
+    read: (userId, workspaceId, prospectId) =>
+      listProspectEvidence(db, userId, workspaceId, prospectId),
     verify,
   })
 );
