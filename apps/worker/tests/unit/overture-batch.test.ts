@@ -31,6 +31,48 @@ describe("Overture-to-Neon intake contracts", () => {
       place.source_id
     );
   });
+  test("preserves a valid source coordinate pair without promoting it to verified geography", () => {
+    const source = asSource({
+      ...place,
+      source_observation: {
+        ...place.source_observation,
+        latitude: 44.95,
+        longitude: -93.1,
+      },
+    });
+    expect(source.reportedClaims).toContainEqual({
+      field: "sourceCoordinates",
+      value: '{"latitude":44.95,"longitude":-93.1}',
+    });
+    expect(
+      source.reportedClaims?.some(
+        (item) => item.field === "verifiedCoordinates"
+      )
+    ).toBe(false);
+  });
+  test("refuses mismatched source identity and omits incomplete or invalid coordinates", () => {
+    expect(() =>
+      asSource({
+        ...place,
+        source_observation: { ...place.source_observation, source_id: "wrong" },
+      })
+    ).toThrow();
+    for (const coordinates of [
+      { latitude: 44.95 },
+      { latitude: 44.95, longitude: "-93.1" },
+      { latitude: 44.95, longitude: 181 },
+    ]) {
+      const source = asSource({
+        ...place,
+        source_observation: { ...place.source_observation, ...coordinates },
+      });
+      expect(
+        source.reportedClaims?.some(
+          (item) => item.field === "sourceCoordinates"
+        )
+      ).toBe(false);
+    }
+  });
   test("rejects malformed source provenance and unbounded query", () => {
     expect(() =>
       asSource({

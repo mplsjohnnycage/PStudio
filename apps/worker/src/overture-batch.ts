@@ -11,6 +11,7 @@ import {
 import { enqueueWorkspaceJob } from "@prospect-studio/db/job-enqueue";
 import { createNeonTokenVerifier } from "../../server/src/auth";
 import { resolveVerifiedDiscoveryOperator } from "./overture-operator";
+import { sourceCoordinateClaims } from "./overture-source";
 
 interface Place {
   address?: string;
@@ -46,6 +47,12 @@ export function asSource(place: Place): SourceCandidate {
   ) {
     throw new Error("Invalid Overture source");
   }
+  if (
+    place.source_observation.source_id !== place.source_id ||
+    place.source_observation.name !== place.name
+  ) {
+    throw new Error("Overture observation identity mismatch");
+  }
   const excerpt = JSON.stringify({
     observation: place.source_observation,
     pilot: place.pilot ?? null,
@@ -70,6 +77,7 @@ export function asSource(place: Place): SourceCandidate {
         ? [{ field: "unverifiedWebsiteCandidate", value: place.website }]
         : []),
       { field: "overtureRelease", value: place.provenance.release },
+      ...sourceCoordinateClaims(place.source_observation),
       ...(place.pilot
         ? [
             { field: "discoveryStage", value: place.pilot.stage },
