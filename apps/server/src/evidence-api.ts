@@ -17,6 +17,7 @@ export interface EvidenceRoutesDependencies {
       type: string;
     }[];
     claims: readonly {
+      evidenceIds?: readonly string[];
       field: string;
       id: string;
       kind: string;

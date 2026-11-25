@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -58,25 +59,42 @@ export function AgentMailInbox({ request, workspaceId }: Props) {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [threadLoading, setThreadLoading] = useState(false);
+  const listEpoch = useRef(0);
+  const threadEpoch = useRef(0);
   const reload = useCallback(async () => {
+    listEpoch.current += 1;
+    const { current } = listEpoch;
     setLoading(true);
     setError("");
     try {
       const data = await request<{ threads: Thread[] }>(
         `/workspaces/${encodeURIComponent(workspaceId)}/agentmail/threads`
       );
-      setThreads(data.threads);
+      if (current === listEpoch.current) {
+        setThreads(data.threads);
+      }
     } catch (cause) {
-      setThreads([]);
-      setError(errorText(cause));
+      if (current === listEpoch.current) {
+        setThreads([]);
+        setError(errorText(cause));
+      }
     } finally {
-      setLoading(false);
+      if (current === listEpoch.current) {
+        setLoading(false);
+      }
     }
   }, [request, workspaceId]);
   useEffect(() => {
+    threadEpoch.current += 1;
     setSelected("");
     setMessages([]);
+    setThreadLoading(false);
     reload();
+    return () => {
+      listEpoch.current += 1;
+      threadEpoch.current += 1;
+    };
   }, [reload]);
   const visible = useMemo(
     () =>
@@ -90,15 +108,27 @@ export function AgentMailInbox({ request, workspaceId }: Props) {
   const active = threads.find((thread) => thread.threadId === selected);
   const open = useCallback(
     async (thread: Thread) => {
+      threadEpoch.current += 1;
+      const { current } = threadEpoch;
       setSelected(thread.threadId);
       setMessages([]);
+      setError("");
+      setThreadLoading(true);
       try {
         const data = await request<{ messages: Message[] }>(
           `/workspaces/${encodeURIComponent(workspaceId)}/agentmail/threads/${encodeURIComponent(thread.threadId)}`
         );
-        setMessages(data.messages);
+        if (current === threadEpoch.current) {
+          setMessages(data.messages);
+        }
       } catch (cause) {
-        setError(errorText(cause));
+        if (current === threadEpoch.current) {
+          setError(errorText(cause));
+        }
+      } finally {
+        if (current === threadEpoch.current) {
+          setThreadLoading(false);
+        }
       }
     },
     [request, workspaceId]
@@ -192,6 +222,9 @@ export function AgentMailInbox({ request, workspaceId }: Props) {
           {active ? (
             <>
               <h2>{active.subject}</h2>
+              {threadLoading ? (
+                <p className="pstudio-comm-muted">Loading conversation…</p>
+              ) : null}
               {messages.map((message) => (
                 <div className="pstudio-comm-message" key={message.messageId}>
                   <div>

@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { Database } from "./index";
 import {
   claims,
@@ -48,6 +48,9 @@ export async function listProspectEvidence(
       .limit(100),
     db
       .select({
+        evidenceIds: sql<
+          string[]
+        >`ARRAY(SELECT ce.evidence_id FROM claim_evidence AS ce WHERE ce.claim_id = ${claims.id} AND ce.prospect_id = ${claims.prospectId} ORDER BY ce.evidence_id)`,
         field: claims.field,
         id: claims.id,
         kind: claims.kind,

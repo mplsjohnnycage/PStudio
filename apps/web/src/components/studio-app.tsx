@@ -40,6 +40,11 @@ import {
   useRef,
   useState,
 } from "react";
+import {
+  evidenceScope,
+  selectScopedEvidence,
+  sourceConfidence,
+} from "@/lib/evidence-context";
 import { summarizeOperatorJobs } from "@/lib/operator-queue";
 import { authConfigured, getApiToken, getAuthClient } from "@/lib/studio-auth";
 import {
@@ -51,6 +56,19 @@ import { AgentMailInbox } from "./agentmail-inbox";
 import { StudioAgent } from "./studio-agent";
 import { StudioMap } from "./studio-map";
 
+interface LicenseMatch {
+  externalId: string;
+  name: string;
+}
+
+class LicenseSelectionRequired extends Error {
+  readonly matches: LicenseMatch[];
+  constructor(matches: LicenseMatch[]) {
+    super("Select a historical license record to import.");
+    this.matches = matches;
+  }
+}
+
 interface Workspace {
   id: string;
   name: string;
@@ -61,12 +79,14 @@ interface Prospect {
   id: string;
   name: string;
   physicalAddress: string | null;
+  sourceProviders?: string[];
   stage: string;
   websiteStatus: string;
   websiteUrl: string | null;
 }
 interface EvidenceFeed {
   claims: {
+    evidenceIds?: string[];
     field: string;
     id: string;
     kind: string;
@@ -140,22 +160,33 @@ async function studioApi<T>(path: string, options?: RequestInit): Promise<T> {
   const value = await response.json();
   if (!response.ok) {
     const code = (value as { error?: string }).error ?? "request_failed";
+    if (code === "selection_required") {
+      const { matches } = value as { matches?: unknown };
+      if (Array.isArray(matches)) {
+        const valid = matches.filter(
+          (item): item is LicenseMatch =>
+            item !== null &&
+            typeof item === "object" &&
+            typeof item.externalId === "string" &&
+            typeof item.name === "string"
+        );
+        throw new LicenseSelectionRequired(valid);
+      }
+    }
     throw new Error(
-      code === "selection_required"
-        ? `Multiple historical matches. Select a license ID and retry: ${JSON.stringify((value as { matches?: unknown }).matches ?? [])}`
-        : code === "not_found"
-          ? "Not found, or this workspace is not accessible."
-          : code === "unauthorized"
-            ? "Your session has expired or is not authorized."
-            : code === "temporarily_unavailable"
-              ? "The service is unavailable. Check the server and database connection."
-              : code === "limit_reached"
-                ? "Workspace limit reached."
-                : code === "invite_only"
-                  ? "This deployment is invite-only. Sign in with an existing workspace owner account."
-                  : code === "invalid_input"
-                    ? "Review your inputs and try again."
-                    : code
+      code === "not_found"
+        ? "Not found, or this workspace is not accessible."
+        : code === "unauthorized"
+          ? "Your session has expired or is not authorized."
+          : code === "temporarily_unavailable"
+            ? "The service is unavailable. Check the server and database connection."
+            : code === "limit_reached"
+              ? "Workspace limit reached."
+              : code === "invite_only"
+                ? "This deployment is invite-only. Sign in with an existing workspace owner account."
+                : code === "invalid_input"
+                  ? "Review your inputs and try again."
+                  : code
     );
   }
   return value as T;
@@ -316,18 +347,37 @@ export function StudioApp() {
   const [agentOpen, setAgentOpen] = useState(false);
   const lastAgentWorkspace = useRef("");
   const [workspaceId, setWorkspaceId] = useState("");
+  const currentWorkspaceId = useRef(workspaceId);
+  currentWorkspaceId.current = workspaceId;
+  const refreshRequestId = useRef(0);
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
+  const previewRequestId = useRef(0);
   const [previewVersions, setPreviewVersions] = useState<PreviewVersion[]>([]);
-  const [evidenceFeed, setEvidenceFeed] = useState<EvidenceFeed | null>(null);
+  const [storedEvidence, setStoredEvidence] = useState<{
+    scope: string;
+    feed: EvidenceFeed | null;
+    status: "ready" | "error";
+  } | null>(null);
+  const activeEvidenceScope = evidenceScope(
+    session?.user?.id,
+    workspaceId,
+    selected
+  );
+  const scopedEvidence = selectScopedEvidence(
+    storedEvidence,
+    activeEvidenceScope
+  );
+  const evidenceFeed = scopedEvidence?.feed ?? null;
   const [review, setReview] = useState<Review | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showWorkspaceCreate, setShowWorkspaceCreate] = useState(false);
   const [workspaceName, setWorkspaceName] = useState("");
   const [discoveryQuery, setDiscoveryQuery] = useState("");
   const [discoveryExternalId, setDiscoveryExternalId] = useState("");
+  const [licenseMatches, setLicenseMatches] = useState<LicenseMatch[]>([]);
   const [newName, setNewName] = useState("");
   const [newAddress, setNewAddress] = useState("");
   const [newWebsite, setNewWebsite] = useState("");
@@ -409,6 +459,11 @@ export function StudioApp() {
   }, [workspaceId]);
 
   const refresh = useCallback(async (ws: string) => {
+    refreshRequestId.current += 1;
+    const requestId = refreshRequestId.current;
+    if (ws !== currentWorkspaceId.current) {
+      return;
+    }
     if (!ws) {
       setProspects([]);
       setJobs([]);
@@ -420,6 +475,12 @@ export function StudioApp() {
       ),
       studioApi<{ jobs: Job[] }>(`/workspaces/${encodeURIComponent(ws)}/jobs`),
     ]);
+    if (
+      requestId !== refreshRequestId.current ||
+      ws !== currentWorkspaceId.current
+    ) {
+      return;
+    }
     setProspects(a.prospects);
     setJobs(b.jobs);
   }, []);
@@ -448,6 +509,7 @@ export function StudioApp() {
     refresh(workspaceId).catch((e) =>
       setError(e instanceof Error ? e.message : "Failed to load prospects")
     );
+    previewRequestId.current += 1;
     setSelected(null);
     setPreview(null);
     setPreviewVersions([]);
@@ -455,6 +517,10 @@ export function StudioApp() {
   }, [workspaceId, refresh]);
 
   useEffect(() => {
+    previewRequestId.current += 1;
+    setPreview(null);
+    setReview(null);
+    let cancelled = false;
     if (!(workspaceId && selected)) {
       setPreviewVersions([]);
       setReview(null);
@@ -463,8 +529,19 @@ export function StudioApp() {
     studioApi<{ previews: PreviewVersion[] }>(
       `/workspaces/${workspaceId}/prospects/${selected}/previews`
     )
-      .then((result) => setPreviewVersions(result.previews))
-      .catch(() => setPreviewVersions([]));
+      .then((result) => {
+        if (!cancelled) {
+          setPreviewVersions(result.previews);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPreviewVersions([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [workspaceId, selected]);
 
   const completedJobCount = jobs.filter(
@@ -472,8 +549,8 @@ export function StudioApp() {
   ).length;
   // biome-ignore lint/correctness/useExhaustiveDependencies: finished background jobs invalidate the stored evidence view.
   useEffect(() => {
-    if (!(workspaceId && selected)) {
-      setEvidenceFeed(null);
+    if (!(workspaceId && selected && activeEvidenceScope)) {
+      setStoredEvidence(null);
       return;
     }
     let active = true;
@@ -482,18 +559,26 @@ export function StudioApp() {
     )
       .then((feed) => {
         if (active) {
-          setEvidenceFeed(feed);
+          setStoredEvidence({
+            feed,
+            scope: activeEvidenceScope,
+            status: "ready",
+          });
         }
       })
       .catch(() => {
         if (active) {
-          setEvidenceFeed(null);
+          setStoredEvidence({
+            feed: null,
+            scope: activeEvidenceScope,
+            status: "error",
+          });
         }
       });
     return () => {
       active = false;
     };
-  }, [completedJobCount, selected, workspaceId]);
+  }, [activeEvidenceScope, completedJobCount, selected, workspaceId]);
 
   const current = workspaces.find((w) => w.id === workspaceId);
   const isOperator = current?.role === "owner" || current?.role === "operator";
@@ -663,45 +748,36 @@ export function StudioApp() {
         ? { externalId: discoveryExternalId.trim() }
         : {}),
     };
-    await action(
-      "discover",
-      () =>
-        studioApi<{ prospectId: string; kind: string; recordStatus: string }>(
-          `/workspaces/${workspaceId}/discover/minneapolis-license`,
-          { body: JSON.stringify(payload), method: "POST" }
-        ),
-      async ({ prospectId, kind }) => {
-        await refresh(workspaceId);
-        setSelected(prospectId);
-        setDiscoveryExternalId("");
-        if (kind === "duplicate") {
-          setNotice(
-            "Existing sourced prospect selected; duplicate record not created. Review its job status or generate another draft."
-          );
-          return;
-        }
-        // One deliberate import action starts the supported fixed-source workflow.
-        // If enqueue fails, admission remains durable and can be retried manually.
-        try {
-          await studioApi(
-            `/workspaces/${workspaceId}/prospects/${prospectId}/jobs`,
-            {
-              body: JSON.stringify({ type: "enrich" }),
-              headers: { "Idempotency-Key": `import-${prospectId}` },
-              method: "POST",
-            }
-          );
-          await refresh(workspaceId);
-          setNotice(
-            "Historical municipal source imported and enrichment queued. A private site draft will be generated automatically after the source is checked."
-          );
-        } catch (importFailure) {
-          setNotice(
-            `Source record saved, but enrichment was not queued: ${importFailure instanceof Error ? importFailure.message : "Unknown error"}. Use source enrichment to retry.`
-          );
-        }
+    setBusy("discover");
+    setError(null);
+    setNotice(null);
+    setLicenseMatches([]);
+    try {
+      const { prospectId, kind } = await studioApi<{
+        prospectId: string;
+        kind: string;
+        recordStatus: string;
+      }>(`/workspaces/${workspaceId}/discover/minneapolis-license`, {
+        body: JSON.stringify(payload),
+        method: "POST",
+      });
+      await refresh(workspaceId);
+      setSelected(prospectId);
+      setDiscoveryExternalId("");
+      setNotice(
+        kind === "duplicate"
+          ? "Existing sourced prospect selected; duplicate record not created."
+          : "Imported historical municipal license evidence. Current business and license status remain unverified."
+      );
+    } catch (cause) {
+      if (cause instanceof LicenseSelectionRequired) {
+        setLicenseMatches(cause.matches);
+      } else {
+        setError(cause instanceof Error ? cause.message : "Unexpected error");
       }
-    );
+    } finally {
+      setBusy(null);
+    }
   }
   async function enqueue(prospectId: string) {
     await action(
@@ -743,6 +819,8 @@ export function StudioApp() {
     window.setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
   async function createPreview(prospectId: string) {
+    previewRequestId.current += 1;
+    const requestId = previewRequestId.current;
     await action(
       "preview",
       () =>
@@ -765,11 +843,17 @@ export function StudioApp() {
         const details = await studioApi<Preview>(
           `/workspaces/${workspaceId}/previews/${res.previewId}`
         );
+        if (requestId !== previewRequestId.current) {
+          return;
+        }
         setPreview(details);
         setReview(null);
         const versions = await studioApi<{ previews: PreviewVersion[] }>(
           `/workspaces/${workspaceId}/prospects/${prospectId}/previews`
         );
+        if (requestId !== previewRequestId.current) {
+          return;
+        }
         setPreviewVersions(versions.previews);
         setNotice(
           `Private draft v${details.version} generated. No publication or outreach occurred.`
@@ -779,19 +863,29 @@ export function StudioApp() {
   }
 
   async function loadPreview(previewId: string) {
+    previewRequestId.current += 1;
+    const requestId = previewRequestId.current;
     await action(
       "load-preview",
       () =>
         studioApi<Preview>(`/workspaces/${workspaceId}/previews/${previewId}`),
       async (details) => {
+        if (requestId !== previewRequestId.current) {
+          return;
+        }
         setPreview(details);
+        setReview(null);
         try {
           const record = await studioApi<Review>(
             `/workspaces/${workspaceId}/previews/${previewId}/review`
           );
-          setReview(record);
+          if (requestId === previewRequestId.current) {
+            setReview(record);
+          }
         } catch {
-          setReview(null);
+          if (requestId === previewRequestId.current) {
+            setReview(null);
+          }
         }
       }
     );
@@ -1200,7 +1294,7 @@ export function StudioApp() {
               </div>
               <div className="prototype-side-actions">
                 <button onClick={() => setView("inbox")} type="button">
-                  <Inbox size={16} /> Inbox <span>0</span>
+                  <Inbox size={16} /> Inbox
                 </button>
                 <button onClick={() => setShowFilters((v) => !v)} type="button">
                   <SlidersHorizontal size={16} /> Filters
@@ -1341,7 +1435,11 @@ export function StudioApp() {
                     id="license-lookup"
                     maxLength={80}
                     minLength={3}
-                    onChange={(e) => setDiscoveryQuery(e.target.value)}
+                    onChange={(e) => {
+                      setDiscoveryQuery(e.target.value);
+                      setLicenseMatches([]);
+                      setDiscoveryExternalId("");
+                    }}
                     placeholder="Search business name"
                     required
                     value={discoveryQuery}
@@ -1353,9 +1451,34 @@ export function StudioApp() {
                     placeholder="Optional license ID for matches"
                     value={discoveryExternalId}
                   />
+                  {licenseMatches.length > 0 ? (
+                    <label>
+                      Matching historical records
+                      <select
+                        aria-label="Select historical license match"
+                        onChange={(e) => setDiscoveryExternalId(e.target.value)}
+                        required
+                        value={discoveryExternalId}
+                      >
+                        <option value="">Choose a license</option>
+                        {licenseMatches.map((match) => (
+                          <option
+                            key={match.externalId}
+                            value={match.externalId}
+                          >
+                            {match.name} — {match.externalId}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                   <button
                     className="studio-btn-secondary"
-                    disabled={!isOperator || busy !== null}
+                    disabled={
+                      !isOperator ||
+                      busy !== null ||
+                      (licenseMatches.length > 0 && !discoveryExternalId)
+                    }
                     type="submit"
                   >
                     <Search size={15} /> Import sourced record
@@ -1369,10 +1492,10 @@ export function StudioApp() {
             </aside>
           ) : null}
           <section className="studio-map-panel">
-            <StudioMap />
+            <StudioMap userId={session.user.id} workspaceId={workspaceId} />
             <div className="prototype-map-glass-chip">
               <span className="studio-live-dot" /> {filtered.length} prospects
-              in view
+              listed
             </div>
             <div
               className={[
@@ -1476,14 +1599,20 @@ export function StudioApp() {
                       <Shield size={18} />
                       <div>
                         <strong>
-                          {chosen.hasExternalSource
-                            ? "Historical public registry"
-                            : "Operator-reported"}
+                          {
+                            sourceConfidence(
+                              chosen.hasExternalSource,
+                              chosen.sourceProviders
+                            ).label
+                          }
                         </strong>
                         <p>
-                          {chosen.hasExternalSource
-                            ? "Registry evidence is sourced, but business activity and license status remain unverified."
-                            : "Operator-provided details are unverified. Add a sourced record for registry enrichment."}
+                          {
+                            sourceConfidence(
+                              chosen.hasExternalSource,
+                              chosen.sourceProviders
+                            ).description
+                          }
                         </p>
                       </div>
                     </div>
@@ -1493,7 +1622,9 @@ export function StudioApp() {
                     <strong>
                       {evidenceFeed
                         ? `${evidenceFeed.evidence.length} sources · ${evidenceFeed.claims.length} claims`
-                        : "Loading source history"}
+                        : scopedEvidence?.status === "error"
+                          ? "Source history unavailable"
+                          : "Loading source history"}
                     </strong>
                     {evidenceFeed?.evidence.slice(0, 3).map((item) => (
                       <div key={item.id}>
@@ -1514,10 +1645,35 @@ export function StudioApp() {
                       </div>
                     ))}
                     {evidenceFeed?.claims.slice(0, 8).map((claim) => (
-                      <p key={claim.id}>
-                        <b>{claim.field}</b> · {claim.value ?? "Unknown"}{" "}
-                        <small>({claim.kind})</small>
-                      </p>
+                      <div key={claim.id}>
+                        <p>
+                          <b>{claim.field}</b> · {claim.value ?? "Unknown"}{" "}
+                          <small>({claim.kind})</small>
+                        </p>
+                        {claim.evidenceIds?.map((id) => {
+                          const source = evidenceFeed.evidence.find(
+                            (item) => item.id === id
+                          );
+                          return source?.sourceUri.startsWith("https://") ? (
+                            <a
+                              href={source.sourceUri}
+                              key={id}
+                              rel="noopener noreferrer"
+                              target="_blank"
+                            >
+                              {source.title} <ExternalLink size={13} />
+                            </a>
+                          ) : (
+                            <small key={id}>
+                              {source?.title ??
+                                "Linked source outside current history"}
+                            </small>
+                          );
+                        })}
+                        {claim.evidenceIds?.length ? null : (
+                          <small>No source link returned</small>
+                        )}
+                      </div>
                     ))}
                     <p>
                       Claims are attributed reports, not independently verified

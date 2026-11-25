@@ -1,4 +1,8 @@
 "use client";
+import {
+  buildCentralCalendarHold,
+  centralToday,
+} from "@prospect-studio/api/calendar-time";
 import { CalendarDays, Clock3, RefreshCcw, Shield } from "lucide-react";
 import {
   type ChangeEvent,
@@ -44,14 +48,7 @@ export function AgentMailCalendar({ request, workspaceId, prospects }: Props) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [prospectId, setProspectId] = useState("");
-  const [date, setDate] = useState(() =>
-    new Date().toLocaleDateString("en-CA", {
-      day: "2-digit",
-      month: "2-digit",
-      timeZone: TZ,
-      year: "numeric",
-    })
-  );
+  const [date, setDate] = useState(() => centralToday());
   const [time, setTime] = useState("10:00");
   const [minutes, setMinutes] = useState(30);
   const load = useCallback(async () => {
@@ -87,10 +84,18 @@ export function AgentMailCalendar({ request, workspaceId, prospects }: Props) {
       if (busy || !prospectId || !date || !time) {
         return;
       }
-      const start = `${date}T${time}:00`;
-      const end = new Date(Date.parse(`${start}Z`) + minutes * 60_000)
-        .toISOString()
-        .slice(0, 19);
+      let start: string;
+      let end: string;
+      try {
+        ({ start, end } = buildCentralCalendarHold(date, time, minutes));
+      } catch (cause) {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Choose a valid Central date and time."
+        );
+        return;
+      }
       const name =
         prospects.find((prospect) => prospect.id === prospectId)?.name ??
         "Business";
@@ -139,21 +144,25 @@ export function AgentMailCalendar({ request, workspaceId, prospects }: Props) {
   const handleProspect = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) => {
       pendingClientId.current = null;
+      setError("");
       setProspectId(event.target.value);
     },
     []
   );
-  const handleDate = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => setDate(event.target.value),
-    []
-  );
-  const handleTime = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => setTime(event.target.value),
-    []
-  );
+  const handleDate = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    pendingClientId.current = null;
+    setError("");
+    setDate(event.target.value);
+  }, []);
+  const handleTime = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    pendingClientId.current = null;
+    setError("");
+    setTime(event.target.value);
+  }, []);
   const handleDuration = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) => {
       pendingClientId.current = null;
+      setError("");
       setMinutes(Number(event.target.value));
     },
     []
@@ -247,7 +256,7 @@ export function AgentMailCalendar({ request, workspaceId, prospects }: Props) {
           </label>
           <button
             className="studio-btn-primary"
-            disabled={busy || !prospectId || Boolean(error)}
+            disabled={busy || !prospectId}
             type="submit"
           >
             <Clock3 size={16} />

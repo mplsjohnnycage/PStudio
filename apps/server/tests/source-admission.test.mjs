@@ -6,6 +6,8 @@ import { PGlite } from "@electric-sql/pglite";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { admitSourcedProspect } from "../../../packages/db/src/admission-queries.ts";
+import { listProspectEvidence } from "../../../packages/db/src/evidence-queries.ts";
+import { listWorkspaceProspects } from "../../../packages/db/src/prospect-queries.ts";
 import {
   claimEvidence,
   claims,
@@ -135,6 +137,21 @@ test("sourced admission is tenant-scoped, repeat-safe, and links every reported 
       linked.every((link) => link.evidenceId === stored[0].id),
       true
     );
+    const feed = await listProspectEvidence(db, user, ws, first.prospectId);
+    assert.equal(feed.claims.length, recordedClaims.length);
+    for (const claim of feed.claims) {
+      assert.deepEqual(claim.evidenceIds, [stored[0].id]);
+    }
+    assert.equal(
+      await listProspectEvidence(db, user, ws2, first.prospectId),
+      null
+    );
+    assert.equal(
+      await listProspectEvidence(db, "outsider", ws, first.prospectId),
+      null
+    );
+    const listed = await listWorkspaceProspects(db, user, ws);
+    assert.deepEqual(listed[0].sourceProviders, [source.provider]);
     const anotherTenant = await admitSourcedProspect(db, user, ws2, source);
     assert.equal(anotherTenant.kind, "created");
     assert.notEqual(anotherTenant.prospectId, first.prospectId);

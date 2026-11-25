@@ -37,11 +37,6 @@ function candidateFromAttributes(
   if (!(license && LICENSE.test(license) && name)) {
     return null;
   }
-  const address = [raw.address1, raw.city, raw.state, raw.zip]
-    .filter((item) => typeof item === "string" && item.trim().length > 0)
-    .map((item) => String(item).trim())
-    .join(", ")
-    .replace(ADDRESS_SUFFIX, ", $1 $2");
   const safe = {
     address1: textField(raw.address1, 150),
     city: textField(raw.city, 100),
@@ -54,6 +49,11 @@ function candidateFromAttributes(
     state: textField(raw.state, 2),
     zip: textField(raw.zip, 12),
   };
+  const address = [safe.address1, safe.city, safe.state, safe.zip]
+    .filter((item): item is string => item !== null)
+    .map((item) => String(item).trim())
+    .join(", ")
+    .replace(ADDRESS_SUFFIX, ", $1 $2");
   const expiration =
     typeof safe.expirationDate === "number" &&
     Number.isFinite(safe.expirationDate)
@@ -121,18 +121,24 @@ async function queryPublicLicenses(
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Invalid source response");
   }
-  const parsed = value as { features?: unknown; error?: unknown };
+  const parsed = value as {
+    features?: unknown;
+    error?: unknown;
+    exceededTransferLimit?: unknown;
+  };
   if (
     parsed.error ||
+    parsed.exceededTransferLimit === true ||
     !Array.isArray(parsed.features) ||
     parsed.features.length > 5
   ) {
     throw new Error("Invalid source response");
   }
-  const at = new Date();
-  return parsed.features
-    .filter(
-      (feature): feature is { attributes: LicenseAttributes } =>
+  // A malformed feature means the provider response is not trustworthy as a
+  // complete search result. Do not silently drop it and imply no match exists.
+  if (
+    !parsed.features.every(
+      (feature) =>
         feature !== null &&
         typeof feature === "object" &&
         !Array.isArray(feature) &&
@@ -141,8 +147,17 @@ async function queryPublicLicenses(
         typeof feature.attributes === "object" &&
         !Array.isArray(feature.attributes)
     )
+  ) {
+    throw new Error("Invalid source response");
+  }
+  const at = new Date();
+  return parsed.features
     .map((feature) =>
-      candidateFromAttributes(feature.attributes, url.toString(), at)
+      candidateFromAttributes(
+        (feature as { attributes: LicenseAttributes }).attributes,
+        url.toString(),
+        at
+      )
     )
     .filter((candidate): candidate is SourceCandidate => candidate !== null);
 }
@@ -171,7 +186,12 @@ export async function lookupMinneapolisLicense(
     `licenseNumber = '${externalId}'`,
     fetcher
   );
-  return (
-    candidates.find((candidate) => candidate.externalId === externalId) ?? null
+  const matches = candidates.filter(
+    (candidate) => candidate.externalId === externalId
   );
+  // Duplicate source identities are ambiguous; never attach evidence arbitrarily.
+  if (matches.length > 1) {
+    throw new Error("Ambiguous license identifier");
+  }
+  return matches[0] ?? null;
 }

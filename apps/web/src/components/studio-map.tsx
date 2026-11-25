@@ -1,7 +1,17 @@
 "use client";
 import { useEffect, useRef } from "react";
+import {
+  INITIAL_MAP_VIEWPORT,
+  mapViewportStorageKey,
+  readMapViewport,
+} from "@/lib/map-viewport";
 
-export function StudioMap() {
+interface StudioMapProps {
+  userId: string;
+  workspaceId: string;
+}
+
+export function StudioMap({ userId, workspaceId }: StudioMapProps) {
   const target = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!target.current) {
@@ -9,6 +19,35 @@ export function StudioMap() {
     }
     let disposed = false;
     let map: import("maplibre-gl").Map | undefined;
+    const storageKey = mapViewportStorageKey(userId, workspaceId);
+    let initial = INITIAL_MAP_VIEWPORT;
+    if (storageKey) {
+      try {
+        initial =
+          readMapViewport(window.localStorage.getItem(storageKey)) ??
+          INITIAL_MAP_VIEWPORT;
+      } catch {
+        // Storage may be blocked; the geographic map still works.
+      }
+    }
+    const persist = () => {
+      if (!(storageKey && map)) {
+        return;
+      }
+      const center = map.getCenter();
+      try {
+        window.localStorage.setItem(
+          storageKey,
+          JSON.stringify({
+            latitude: center.lat,
+            longitude: center.lng,
+            zoom: map.getZoom(),
+          })
+        );
+      } catch {
+        // Ephemeral map state is still usable in private browsing.
+      }
+    };
     (async () => {
       const lib = await import("maplibre-gl");
       if (disposed || !target.current) {
@@ -16,7 +55,7 @@ export function StudioMap() {
       }
       map = new lib.Map({
         attributionControl: false,
-        center: [-93.265, 44.978],
+        center: [initial.longitude, initial.latitude],
         container: target.current,
         maxZoom: 18,
         style: {
@@ -32,8 +71,9 @@ export function StudioMap() {
           },
           version: 8,
         },
-        zoom: 9.8,
+        zoom: initial.zoom,
       });
+      map.on("moveend", persist);
       map.addControl(
         new lib.NavigationControl({ visualizePitch: true }),
         "bottom-right"
@@ -47,9 +87,10 @@ export function StudioMap() {
     });
     return () => {
       disposed = true;
+      map?.off("moveend", persist);
       map?.remove();
     };
-  }, []);
+  }, [userId, workspaceId]);
   return (
     <div className="studio-map-wrap">
       <section
