@@ -23,3 +23,28 @@ export function selectAccessibleWorkspace(
 export function workspaceCreationAllowed(inviteOnlyFlag?: string): boolean {
   return inviteOnlyFlag !== "1";
 }
+
+/** Scope private workspace data to the signed-in user and verified membership. */
+export function workspaceDataScope(
+  userId: string | undefined,
+  loadedUserId: string,
+  workspaceId: string,
+  workspaces: readonly { id: string }[]
+): string | null {
+  if (
+    !userId ||
+    userId !== loadedUserId ||
+    !workspaceId ||
+    !workspaces.some((workspace) => workspace.id === workspaceId)
+  ) {
+    return null;
+  }
+  return JSON.stringify([userId, workspaceId]);
+}
+
+export function selectScopedWorkspaceData<T extends { scope: string }>(
+  data: T | null,
+  scope: string | null
+): T | null {
+  return scope && data?.scope === scope ? data : null;
+}
