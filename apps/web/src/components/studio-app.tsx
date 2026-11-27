@@ -2032,10 +2032,15 @@ export function StudioApp() {
         </section>
       ) : null}
       {view === "inbox" ? (
-        <AgentMailInbox request={studioApi} workspaceId={workspaceId} />
+        <AgentMailInbox
+          key={workspaceId}
+          request={studioApi}
+          workspaceId={workspaceId}
+        />
       ) : null}
       {view === "calendar" ? (
         <AgentMailCalendar
+          key={workspaceId}
           prospects={prospects}
           request={studioApi}
           workspaceId={workspaceId}
