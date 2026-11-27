@@ -1,6 +1,7 @@
 name: Discovery Python
 
 on:
+  workflow_call:
   pull_request:
   push:
     branches: [main]

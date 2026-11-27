@@ -1,6 +1,7 @@
 name: Rivet Integration
 
 on:
+  workflow_call:
   pull_request:
   push:
     branches: [main]
@@ -10,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: rivet-integration-${{ github.event.pull_request.number || github.ref }}
+  group: rivet-integration-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:

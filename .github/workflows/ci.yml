@@ -51,15 +51,28 @@ jobs:
       - name: Run ${{ matrix.check }}
         run: npm run "${{ matrix.check }}"
 
+  discovery:
+    name: Discovery Python aggregate
+    uses: ./.github/workflows/discovery.yml
+
+  rivet-integration:
+    name: Rivet Integration aggregate
+    uses: ./.github/workflows/rivet-integration.yml
+
   release-gate:
     name: Release verification gate
     if: ${{ always() }}
-    needs: [verify]
+    needs: [verify, discovery, rivet-integration]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions: {}
     steps:
-      - name: Require every verification job to succeed
+      - name: Require all verification workflows to succeed
         env:
           VERIFY_RESULT: ${{ needs.verify.result }}
-        run: test "$VERIFY_RESULT" = success
+          DISCOVERY_RESULT: ${{ needs.discovery.result }}
+          RIVET_RESULT: ${{ needs.rivet-integration.result }}
+        run: |
+          test "$VERIFY_RESULT" = success
+          test "$DISCOVERY_RESULT" = success
+          test "$RIVET_RESULT" = success
