@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   selectAccessibleWorkspace,
+  selectScopedWorkspaceData,
   workspaceCreationAllowed,
+  workspaceDataScope,
 } from "../src/lib/workspace-selection.ts";
 
 const workspaces = [
@@ -53,4 +55,53 @@ test("invite-only staging never offers a create-workspace action", () => {
   assert.equal(workspaceCreationAllowed("1"), false);
   assert.equal(workspaceCreationAllowed("0"), true);
   assert.equal(workspaceCreationAllowed(undefined), true);
+});
+
+test("workspace data requires the current user's verified membership", () => {
+  const scope = workspaceDataScope(
+    "owner",
+    "owner",
+    "workspace_owner",
+    workspaces
+  );
+  assert.ok(scope);
+  assert.equal(
+    workspaceDataScope("other", "owner", "workspace_owner", workspaces),
+    null
+  );
+  assert.equal(
+    workspaceDataScope("owner", "owner", "revoked", workspaces),
+    null
+  );
+  assert.equal(workspaceDataScope("owner", "owner", "", workspaces), null);
+});
+
+test("workspace changes hide previously loaded prospects and jobs before the next response", () => {
+  const previous = workspaceDataScope(
+    "owner",
+    "owner",
+    "workspace_owner",
+    workspaces
+  );
+  const next = workspaceDataScope(
+    "owner",
+    "owner",
+    "workspace_two",
+    workspaces
+  );
+  const data = {
+    jobs: ["old job"],
+    prospects: ["old prospect"],
+    scope: previous,
+  };
+  assert.equal(selectScopedWorkspaceData(data, previous), data);
+  assert.equal(selectScopedWorkspaceData(data, next), null);
+  assert.equal(selectScopedWorkspaceData(data, null), null);
+  const differentUser = workspaceDataScope(
+    "other",
+    "other",
+    "workspace_owner",
+    workspaces
+  );
+  assert.equal(selectScopedWorkspaceData(data, differentUser), null);
 });

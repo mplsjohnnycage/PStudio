@@ -49,7 +49,9 @@ import { summarizeOperatorJobs } from "@/lib/operator-queue";
 import { authConfigured, getApiToken, getAuthClient } from "@/lib/studio-auth";
 import {
   selectAccessibleWorkspace,
+  selectScopedWorkspaceData,
   workspaceCreationAllowed,
+  workspaceDataScope,
 } from "@/lib/workspace-selection";
 import { AgentMailCalendar } from "./agentmail-calendar";
 import { AgentMailInbox } from "./agentmail-inbox";
@@ -129,6 +131,9 @@ interface Review {
   releaseId: string;
   state: string;
 }
+
+const emptyProspects: Prospect[] = [];
+const emptyJobs: Job[] = [];
 
 const useSameOrigin = process.env.NEXT_PUBLIC_PSTUDIO_SAME_ORIGIN === "1";
 const serverConfigured =
@@ -353,9 +358,26 @@ export function StudioApp() {
   const [workspaceId, setWorkspaceId] = useState("");
   const currentWorkspaceId = useRef(workspaceId);
   currentWorkspaceId.current = workspaceId;
+  const workspaceScope = workspaceDataScope(
+    session?.user?.id,
+    loadedWorkspaceUserId,
+    workspaceId,
+    workspaces
+  );
+  const currentWorkspaceScope = useRef(workspaceScope);
+  currentWorkspaceScope.current = workspaceScope;
   const refreshRequestId = useRef(0);
-  const [prospects, setProspects] = useState<Prospect[]>([]);
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const [workspaceData, setWorkspaceData] = useState<{
+    jobs: Job[];
+    prospects: Prospect[];
+    scope: string;
+  } | null>(null);
+  const scopedWorkspaceData = selectScopedWorkspaceData(
+    workspaceData,
+    workspaceScope
+  );
+  const prospects = scopedWorkspaceData?.prospects ?? emptyProspects;
+  const jobs = scopedWorkspaceData?.jobs ?? emptyJobs;
   const [selected, setSelected] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const previewRequestId = useRef(0);
@@ -463,30 +485,32 @@ export function StudioApp() {
   }, [workspaceId]);
 
   const refresh = useCallback(async (ws: string) => {
+    const scope = currentWorkspaceScope.current;
+    if (!scope || ws !== currentWorkspaceId.current) {
+      return;
+    }
     refreshRequestId.current += 1;
     const requestId = refreshRequestId.current;
-    if (ws !== currentWorkspaceId.current) {
-      return;
+    const isCurrent = () =>
+      requestId === refreshRequestId.current &&
+      scope === currentWorkspaceScope.current;
+    try {
+      const [a, b] = await Promise.all([
+        studioApi<{ prospects: Prospect[] }>(
+          `/workspaces/${encodeURIComponent(ws)}/prospects`
+        ),
+        studioApi<{ jobs: Job[] }>(
+          `/workspaces/${encodeURIComponent(ws)}/jobs`
+        ),
+      ]);
+      if (isCurrent()) {
+        setWorkspaceData({ jobs: b.jobs, prospects: a.prospects, scope });
+      }
+    } catch (cause) {
+      if (isCurrent()) {
+        throw cause;
+      }
     }
-    if (!ws) {
-      setProspects([]);
-      setJobs([]);
-      return;
-    }
-    const [a, b] = await Promise.all([
-      studioApi<{ prospects: Prospect[] }>(
-        `/workspaces/${encodeURIComponent(ws)}/prospects`
-      ),
-      studioApi<{ jobs: Job[] }>(`/workspaces/${encodeURIComponent(ws)}/jobs`),
-    ]);
-    if (
-      requestId !== refreshRequestId.current ||
-      ws !== currentWorkspaceId.current
-    ) {
-      return;
-    }
-    setProspects(a.prospects);
-    setJobs(b.jobs);
   }, []);
 
   useEffect(() => {
@@ -495,8 +519,7 @@ export function StudioApp() {
       setWorkspaceId("");
       setLoadedWorkspaceUserId("");
       setWorkspaceLoadState("loading");
-      setProspects([]);
-      setJobs([]);
+      setWorkspaceData(null);
       return;
     }
     refreshWorkspaces().catch((e) =>
@@ -505,9 +528,8 @@ export function StudioApp() {
   }, [session?.user?.id, refreshWorkspaces]);
 
   useEffect(() => {
-    if (!workspaceId) {
-      setProspects([]);
-      setJobs([]);
+    if (!workspaceScope) {
+      setWorkspaceData(null);
       return;
     }
     refresh(workspaceId).catch((e) =>
@@ -518,7 +540,7 @@ export function StudioApp() {
     setPreview(null);
     setPreviewVersions([]);
     setReview(null);
-  }, [workspaceId, refresh]);
+  }, [workspaceId, workspaceScope, refresh]);
 
   useEffect(() => {
     previewRequestId.current += 1;
@@ -2031,16 +2053,16 @@ export function StudioApp() {
           </div>
         </section>
       ) : null}
-      {view === "inbox" ? (
+      {view === "inbox" && workspaceScope ? (
         <AgentMailInbox
-          key={workspaceId}
+          key={workspaceScope}
           request={studioApi}
           workspaceId={workspaceId}
         />
       ) : null}
-      {view === "calendar" ? (
+      {view === "calendar" && workspaceScope ? (
         <AgentMailCalendar
-          key={workspaceId}
+          key={workspaceScope}
           prospects={prospects}
           request={studioApi}
           workspaceId={workspaceId}
