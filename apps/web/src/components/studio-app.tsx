@@ -45,6 +45,7 @@ import {
   selectScopedEvidence,
   sourceConfidence,
 } from "@/lib/evidence-context";
+import { settleWorkspaceRefresh } from "@/lib/workspace-refresh";
 import { summarizeOperatorJobs } from "@/lib/operator-queue";
 import { authConfigured, getApiToken, getAuthClient } from "@/lib/studio-auth";
 import {
@@ -469,18 +470,19 @@ export function StudioApp() {
       setJobs([]);
       return;
     }
-    const [a, b] = await Promise.all([
+    const result = await settleWorkspaceRefresh(Promise.all([
       studioApi<{ prospects: Prospect[] }>(
         `/workspaces/${encodeURIComponent(ws)}/prospects`
       ),
       studioApi<{ jobs: Job[] }>(`/workspaces/${encodeURIComponent(ws)}/jobs`),
-    ]);
-    if (
-      requestId !== refreshRequestId.current ||
-      ws !== currentWorkspaceId.current
-    ) {
+    ]), () =>
+      requestId === refreshRequestId.current &&
+      ws === currentWorkspaceId.current
+    );
+    if (!result) {
       return;
     }
+    const [a, b] = result;
     setProspects(a.prospects);
     setJobs(b.jobs);
   }, []);

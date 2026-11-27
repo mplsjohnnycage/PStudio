@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        check: [check, check-types, test, build]
+        check: [check, env:generate, check-types, test, build]
     env:
       CI: "true"
       NEXT_TELEMETRY_DISABLED: "1"
@@ -50,3 +50,29 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Run ${{ matrix.check }}
         run: npm run "${{ matrix.check }}"
+
+  discovery:
+    name: Discovery Python aggregate
+    uses: ./.github/workflows/discovery.yml
+
+  rivet-integration:
+    name: Rivet Integration aggregate
+    uses: ./.github/workflows/rivet-integration.yml
+
+  release-gate:
+    name: Release verification gate
+    if: ${{ always() }}
+    needs: [verify, discovery, rivet-integration]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Require all verification workflows to succeed
+        env:
+          VERIFY_RESULT: ${{ needs.verify.result }}
+          DISCOVERY_RESULT: ${{ needs.discovery.result }}
+          RIVET_RESULT: ${{ needs.rivet-integration.result }}
+        run: |
+          test "$VERIFY_RESULT" = success
+          test "$DISCOVERY_RESULT" = success
+          test "$RIVET_RESULT" = success
