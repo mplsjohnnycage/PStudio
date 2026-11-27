@@ -130,11 +130,15 @@ interface Review {
   state: string;
 }
 
-const serverConfigured = Boolean(process.env.NEXT_PUBLIC_SERVER_URL);
+const useSameOrigin = process.env.NEXT_PUBLIC_PSTUDIO_SAME_ORIGIN === "1";
+const serverConfigured =
+  useSameOrigin || Boolean(process.env.NEXT_PUBLIC_SERVER_URL);
 const canCreateWorkspace = workspaceCreationAllowed(
   process.env.NEXT_PUBLIC_STAGING_INVITE_ONLY
 );
-const apiOrigin = process.env.NEXT_PUBLIC_SERVER_URL?.replace(/\/$/, "") ?? "";
+const apiOrigin = useSameOrigin
+  ? ""
+  : (process.env.NEXT_PUBLIC_SERVER_URL?.replace(/\/$/, "") ?? "");
 
 async function studioApi<T>(path: string, options?: RequestInit): Promise<T> {
   if (!serverConfigured) {
@@ -2028,10 +2032,15 @@ export function StudioApp() {
         </section>
       ) : null}
       {view === "inbox" ? (
-        <AgentMailInbox request={studioApi} workspaceId={workspaceId} />
+        <AgentMailInbox
+          key={workspaceId}
+          request={studioApi}
+          workspaceId={workspaceId}
+        />
       ) : null}
       {view === "calendar" ? (
         <AgentMailCalendar
+          key={workspaceId}
           prospects={prospects}
           request={studioApi}
           workspaceId={workspaceId}

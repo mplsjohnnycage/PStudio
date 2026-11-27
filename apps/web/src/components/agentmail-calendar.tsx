@@ -12,6 +12,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createLatestRequestGate } from "../lib/latest-request-gate";
 
 type Request = <T>(path: string, options?: RequestInit) => Promise<T>;
 interface CalendarEvent {
@@ -44,6 +45,7 @@ export function AgentMailCalendar({ request, workspaceId, prospects }: Props) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [busy, setBusy] = useState(false);
   const pendingClientId = useRef<string | null>(null);
+  const agendaGate = useRef(createLatestRequestGate());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -52,6 +54,7 @@ export function AgentMailCalendar({ request, workspaceId, prospects }: Props) {
   const [time, setTime] = useState("10:00");
   const [minutes, setMinutes] = useState(30);
   const load = useCallback(async () => {
+    const isCurrent = agendaGate.current.begin();
     setLoading(true);
     setError("");
     const after = new Date();
@@ -62,8 +65,13 @@ export function AgentMailCalendar({ request, workspaceId, prospects }: Props) {
       const data = await request<{ events: CalendarEvent[] }>(
         `/workspaces/${encodeURIComponent(workspaceId)}/agentmail/agenda?after=${encodeURIComponent(after.toISOString())}&before=${encodeURIComponent(before.toISOString())}`
       );
-      setEvents(data.events);
+      if (isCurrent()) {
+        setEvents(data.events);
+      }
     } catch (cause) {
+      if (!isCurrent()) {
+        return;
+      }
       setEvents([]);
       setError(
         cause instanceof Error &&
@@ -72,11 +80,15 @@ export function AgentMailCalendar({ request, workspaceId, prospects }: Props) {
           : "AgentMail Calendar could not be loaded."
       );
     } finally {
-      setLoading(false);
+      if (isCurrent()) {
+        setLoading(false);
+      }
     }
   }, [request, workspaceId]);
   useEffect(() => {
+    const gate = agendaGate.current;
     load();
+    return () => gate.invalidate();
   }, [load]);
   const schedule = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {

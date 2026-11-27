@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        check: [check, check-types, test, build]
+        check: [check, env:generate, check-types, test, build]
     env:
       CI: "true"
       NEXT_TELEMETRY_DISABLED: "1"
@@ -50,3 +50,16 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Run ${{ matrix.check }}
         run: npm run "${{ matrix.check }}"
+
+  release-gate:
+    name: Release verification gate
+    if: ${{ always() }}
+    needs: [verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Require every verification job to succeed
+        env:
+          VERIFY_RESULT: ${{ needs.verify.result }}
+        run: test "$VERIFY_RESULT" = success
